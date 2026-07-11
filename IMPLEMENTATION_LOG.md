@@ -39,6 +39,16 @@
 
 ## Записи
 
+### 2026-07-11 · README PowerShell quick start · Codex
+- **Что сделано:** добавлена отдельная инструкция запуска для старого Windows PowerShell, где `&&` не поддерживается.
+- **Где:** `README.md`.
+- **Публичный интерфейс:** изменений нет.
+- **Как использовать:** запускать backend и frontend пошаговыми командами из блока `powershell`: `cd backend`,
+  `npm install`, `Copy-Item .env.example .env`, `npm run dev`; затем во втором терминале `cd frontend`,
+  `npm install`, `npm run dev`.
+- **Отклонения от контракта:** нет.
+- **Известные баги / TODO:** нет.
+
 ### 2026-07-11 · Player + sampler engine · C
 - **Что сделано:** плеер теперь выбирает synth/kit по `track.instrument`, защищённо обрабатывает неизвестные sound,
   применяет `gain`, `muted`, `sound` и `events` при каждом идемпотентном `load(song)`; события вне лупа репортятся,

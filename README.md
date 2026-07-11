@@ -17,6 +17,20 @@ cd backend && npm install && cp .env.example .env && npm run dev     # :3001
 # терминал 2
 cd frontend && npm install && npm run dev                            # :5173
 ```
+
+Если запускаете из старого Windows PowerShell, где `&&` не поддерживается:
+```powershell
+# терминал 1
+cd backend
+npm install
+Copy-Item .env.example .env
+npm run dev
+
+# терминал 2
+cd frontend
+npm install
+npm run dev
+```
 Работает end-to-end уже на заглушке LLM (`backend/src/llm.js`). Human B заменяет заглушку реальной моделью.
 
 ## Структура
