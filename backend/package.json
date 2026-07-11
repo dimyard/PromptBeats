@@ -6,7 +6,8 @@
   "description": "PromptBeats gateway: prompt -> Song JSON. Owner: Human B.",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "ajv": "^8.17.1",
