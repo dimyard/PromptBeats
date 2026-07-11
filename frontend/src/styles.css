@@ -482,6 +482,32 @@ summary:focus-visible {
   min-width: 0;
 }
 
+.song-title-input {
+  display: block;
+  width: min(28rem, 100%);
+  border: 1px solid transparent;
+  border-radius: 0.42rem;
+  margin: 0;
+  padding: 0.12rem 0.32rem 0.16rem;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 1.35rem;
+  font-weight: 700;
+  outline: 0;
+}
+
+.song-title-input:hover,
+.song-title-input:focus {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--raised) 48%, transparent);
+}
+
+.song-title-input:disabled {
+  color: var(--dim);
+}
+
 .song-summary {
   margin: 0.3rem 0 0;
   overflow: hidden;

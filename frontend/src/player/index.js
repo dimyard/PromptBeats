@@ -21,6 +21,7 @@ const MAX_BPM = 220;
 const MAX_BARS = 32;
 const MASTER_GAIN = 0.8;
 const LIMITER_THRESHOLD_DB = -1;
+const STEP_POLL_MS = 50;
 
 const numberInRange = (value, fallback, min, max) => {
   const number = Number(value);
@@ -35,12 +36,20 @@ export function createPlayer() {
   let trackOutputs = [];
   let masterNodes = [];
   let stepEventId = null;
+  let stepPollId = null;
+  let lastEmittedStep = null;
   let totalSteps = 16;
   let playing = false;
   let lastSong = null;
   const listeners = { step: [], ready: [], error: [] };
 
   const emit = (ev, payload) => (listeners[ev] || []).forEach((cb) => cb(payload));
+
+  function emitStep(step = currentTransportStep(), { force = false } = {}) {
+    if (!force && step === lastEmittedStep) return;
+    lastEmittedStep = step;
+    emit("step", step);
+  }
 
   function currentTransportStep() {
     const [bars = 0, quarters = 0, sixteenths = 0] = String(Tone.Transport.position)
@@ -118,9 +127,24 @@ export function createPlayer() {
     if (stepEventId !== null) return;
     stepEventId = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        emit("step", currentTransportStep());
+        emitStep();
       }, time);
     }, "16n");
+  }
+
+  function startStepPoller() {
+    if (stepPollId !== null || typeof globalThis.setInterval !== "function") return;
+    const tick = () => {
+      if (playing && Tone.Transport.state === "started") emitStep();
+    };
+    stepPollId = globalThis.setInterval(tick, STEP_POLL_MS);
+    tick();
+  }
+
+  function stopStepPoller() {
+    if (stepPollId === null || typeof globalThis.clearInterval !== "function") return;
+    globalThis.clearInterval(stepPollId);
+    stepPollId = null;
   }
 
   async function load(song) {
@@ -229,9 +253,10 @@ export function createPlayer() {
 
       ensureStepScheduler();
 
-      emit("step", preservePosition ? currentTransportStep() : 0);
+      emitStep(preservePosition ? currentTransportStep() : 0, { force: true });
       emit("ready", { totalSteps });
       if (wasPlaying && !preservePosition) await play();
+      if (wasPlaying && preservePosition) startStepPoller();
     } catch (err) {
       emit("error", { code: "load_failed", message: err.message });
       throw err;
@@ -243,14 +268,16 @@ export function createPlayer() {
     trackOutputs.forEach(({ gain, outputLevel }) => setOutputGain(gain, outputLevel));
     Tone.Transport.start();
     playing = true;
+    startStepPoller();
   }
 
   function stop() {
     Tone.Transport.stop();
+    stopStepPoller();
     trackOutputs.forEach(({ gain }) => setOutputGain(gain, 0, STOP_FADE_SECONDS));
     Tone.Transport.position = 0;
     playing = false;
-    emit("step", 0);
+    emitStep(0, { force: true });
   }
 
   /**

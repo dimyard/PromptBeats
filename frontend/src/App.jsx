@@ -79,6 +79,7 @@ const DEFAULT_ADD_TRACK = {
   instrument: "synth",
   sound: "pluck",
 };
+const DEFAULT_DRAFT_TITLE = "Новый скетч";
 const DEFAULT_PREVIEW_SETTINGS = {
   laneVariant: "compact",
   layoutVariant: "classic3col",
@@ -93,6 +94,17 @@ const DEFAULT_PREVIEW_SETTINGS = {
 
 function copySong(source) {
   return JSON.parse(JSON.stringify(source));
+}
+
+function createEmptySong(title = DEFAULT_DRAFT_TITLE) {
+  return {
+    version: 1,
+    title: title.trim() || DEFAULT_DRAFT_TITLE,
+    bpm: 75,
+    key: "A minor",
+    bars: 2,
+    tracks: [],
+  };
 }
 
 function makeMessage(role, text) {
@@ -161,6 +173,7 @@ export default function App() {
   ]);
   const [input, setInput] = useState("");
   const [song, setSong] = useState(null);
+  const [titleDraft, setTitleDraft] = useState(DEFAULT_DRAFT_TITLE);
   const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -276,7 +289,7 @@ export default function App() {
   const statusKind = statusSnapshot.kind;
 
   const songSummary = useMemo(() => {
-    if (!song) return "Song JSON ещё не загружен";
+    if (!song) return "Черновик можно собрать вручную";
     return `${song.title ?? "untitled"} · ${song.bpm} BPM · ${song.key ?? "no key"} · ${formatBars(song.bars)}`;
   }, [song]);
 
@@ -325,6 +338,10 @@ export default function App() {
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    setTitleDraft(song?.title ?? DEFAULT_DRAFT_TITLE);
+  }, [song?.title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -487,10 +504,11 @@ export default function App() {
   }
 
   async function applySongEdit(updater, successMessage) {
-    if (!song || busy) return;
+    if (busy) return;
     try {
-      const nextSong = updater(song);
-      await loadSong(nextSong, null, { resetStep: false });
+      const source = song ?? createEmptySong(titleDraft);
+      const nextSong = updater(source);
+      await loadSong(nextSong, null, { resetStep: !song });
       if (successMessage) showToast(successMessage);
     } catch (error) {
       const message = friendlyError(error);
@@ -538,6 +556,13 @@ export default function App() {
     playerRef.current?.stop();
     setPlaying(false);
     setStep(0);
+  }
+
+  function commitSongTitle(value) {
+    const nextTitle = value.trim() || DEFAULT_DRAFT_TITLE;
+    setTitleDraft(nextTitle);
+    if (song?.title === nextTitle) return;
+    applySongEdit((current) => ({ ...current, title: nextTitle }), song ? "Название обновлено" : "Черновик создан");
   }
 
   function updateTrackDraft(patch) {
@@ -840,7 +865,17 @@ export default function App() {
         <header className="transport">
           <div className="transport-title">
             <p className="eyebrow">Текущий трек</p>
-            <h2>{song?.title ?? "Нет загруженного трека"}</h2>
+            <input
+              className="song-title-input"
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={(event) => commitSongTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+              disabled={busy}
+              aria-label="Название трека"
+            />
             <p className="song-summary">{songSummary}</p>
           </div>
 
@@ -873,7 +908,7 @@ export default function App() {
         <div className="control-strip" aria-label="Ручные контролы песни">
           <BpmControl
             value={musicUiState.playback.bpm}
-            disabled={!song || busy}
+            disabled={busy}
             onDec={() => applySongEdit((current) => setSongBpm(current, current.bpm - 1))}
             onInc={() => applySongEdit((current) => setSongBpm(current, current.bpm + 1))}
             onCommit={(nextBpm) => applySongEdit((current) => setSongBpm(current, nextBpm), "BPM обновлён")}
@@ -882,7 +917,7 @@ export default function App() {
             <span>Bars</span>
             <select
               value={song?.bars ?? 2}
-              disabled={!song || busy}
+              disabled={busy}
               onChange={(event) => applySongEdit((current) => setSongBars(current, Number(event.target.value)), "Длина лупа обновлена")}
             >
               {BAR_OPTIONS.map((bars) => (
@@ -915,7 +950,7 @@ export default function App() {
             <div className="add-track-controls" aria-label="Добавить дорожку">
               <label>
                 <span>role</span>
-                <select value={trackDraft.role} onChange={(event) => updateTrackDraft({ role: event.target.value })} disabled={!song || busy}>
+                <select value={trackDraft.role} onChange={(event) => updateTrackDraft({ role: event.target.value })} disabled={busy}>
                   {(catalog.roles ?? FALLBACK_CATALOG.roles).map((role) => (
                     <option value={role} key={role}>
                       {ROLE_LABELS[role] ?? role}
@@ -933,7 +968,7 @@ export default function App() {
                       role: event.target.value === "sampler" ? "drums" : trackDraft.role,
                     })
                   }
-                  disabled={!song || busy}
+                  disabled={busy}
                 >
                   <option value="synth">synth</option>
                   <option value="sampler">sampler</option>
@@ -941,7 +976,7 @@ export default function App() {
               </label>
               <label>
                 <span>sound</span>
-                <select value={trackDraft.sound} onChange={(event) => updateTrackDraft({ sound: event.target.value })} disabled={!song || busy}>
+                <select value={trackDraft.sound} onChange={(event) => updateTrackDraft({ sound: event.target.value })} disabled={busy}>
                   {draftSounds.map((sound) => (
                     <option value={sound} key={sound}>
                       {sound}
@@ -949,7 +984,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <button className="add-track-button" type="button" onClick={addDraftTrack} disabled={!song || busy}>
+              <button className="add-track-button" type="button" onClick={addDraftTrack} disabled={busy}>
                 + Дорожка
               </button>
             </div>
@@ -1019,8 +1054,8 @@ export default function App() {
           ))}
           {!song && (
             <div className="empty-state">
-              <h3>Поставь первую пластинку</h3>
-              <p>Опиши трек в чате или открой библиотеку (♫) в панели транспорта и выбери готовый.</p>
+              <h3>Собери черновик вручную</h3>
+              <p>Задай название, BPM, длину лупа и добавь первую дорожку. Импорт и генерация остаются доступными.</p>
             </div>
           )}
         </section>
