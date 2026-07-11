@@ -1,0 +1,21 @@
+{
+  "name": "promptbeats-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PromptBeats web UI + Tone.js player. Owners: Human A (UI) + Human C (player).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tone": "^15.0.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

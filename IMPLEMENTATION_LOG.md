@@ -13,11 +13,11 @@
 |-----------|----------|--------|---------------------|-----|
 | Song JSON + схема | все | ✅ готов (v1) | `song.schema.json` | корень |
 | Фикстура-мок | все | ✅ готов | `sample-song.json` | корень |
-| Бэк `/api/compose` | B | ⬜ не начат | `POST /api/compose`, `GET /api/catalog` | `backend/` |
-| LLM-промт + валидатор | B | ⬜ не начат | — | `backend/` |
-| Player (Tone.js) | C | ⬜ не начат | `createPlayer()` | `frontend/src/player/` |
-| Чат-UI + состояние | A | ⬜ не начат | — | `frontend/` |
-| Грид дорожек | A | ⬜ не начат | — | `frontend/` |
+| Бэк `/api/compose` | B | 🟡 каркас готов | `POST /api/compose`, `GET /api/catalog` | `backend/` |
+| LLM-промт + валидатор | B | 🟡 валидатор+ретрай готовы, LLM — заглушка | `backend/src/llm.js` | `backend/` |
+| Player (Tone.js) | C | 🟡 рабочий базовый | `createPlayer()` | `frontend/src/player/` |
+| Чат-UI + состояние | A | 🟡 рабочий базовый | — | `frontend/` |
+| Грид дорожек | A | 🟡 базовый | — | `frontend/src/App.jsx` |
 | Экспорт WAV (растяжка) | C | ⬜ не начат | `player.exportWav()` | `frontend/src/player/` |
 
 Легенда: ⬜ не начат · 🟡 в работе · ✅ готов · ⚠️ есть отклонение/баг (см. запись).
@@ -38,6 +38,21 @@
 ---
 
 ## Записи
+
+### 2026-07-11 · Скелет проекта (backend + frontend + player) · setup
+- **Что сделано:** рабочий end-to-end каркас по контрактам. Запускается на заглушке LLM.
+- **Где:** `backend/` (server/compose/validate/llm/catalog), `frontend/` (Vite+React, `src/App.jsx`, `src/api.js`),
+  `frontend/src/player/` (`index.js`, `sounds.js`), корневые `README.md`, `.gitignore`.
+- **Публичный интерфейс:** `POST /api/compose`, `GET /api/catalog`; `createPlayer()`; `api.compose()/getCatalog()`.
+- **Как использовать:** `cd backend && npm i && npm run dev` (:3001); `cd frontend && npm i && npm run dev` (:5173).
+  Чат → `/api/compose` → `player.load(song)` → play. Правка = тот же вызов с текущим song.
+- **Отклонения от контракта:** нет. Проверено: backend compose (generate/edit/invalid) — зелёное;
+  все src-файлы фронта парсятся (esbuild).
+- **Известные баги / TODO:**
+  - B: заменить STUB в `backend/src/llm.js` реальным LLM (система-промт + few-shot + JSON-only). Ретрай с
+    ошибками валидации уже прокинут через `previousErrors`.
+  - C: киты сейчас синтезированные (без сэмплов); при желании перевести на `Tone.Sampler`; сделать `exportWav()`.
+  - A: полировка UI/истории/тостов, кнопка «Пример» как фолбэк.
 
 ### 2026-07-11 · Контракты и фикстуры · setup
 - **Что сделано:** заведены контракты и общий мок для старта.
