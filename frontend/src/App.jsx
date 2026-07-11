@@ -202,7 +202,7 @@ export default function App() {
   const importOpenRef = useRef(false); // latest importOpen for window listeners
 
   const previewEnabled = import.meta.env.DEV;
-  const usesMockSignals = previewEnabled && previewSettings.statePreset !== "live";
+  const usesMockSignals = previewEnabled && previewSettings.statePreset !== "live" && !playing;
   const mood = songMood(song);
   const draftSounds = soundsForInstrument(catalog, trackDraft.instrument);
   const realErrorState = lastError
@@ -337,6 +337,14 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setStep((current) => Math.min(Math.max(0, totalSteps - 1), current));
+    setPreviewSettings((current) => ({
+      ...current,
+      mockCurrentStep: Math.min(Math.max(0, totalSteps - 1), current.mockCurrentStep),
+    }));
+  }, [totalSteps]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -939,6 +947,7 @@ export default function App() {
               trackActivity={musicUiState.tracks.find((item) => item.trackId === track.id)}
               totalSteps={totalSteps}
               activeStep={musicUiState.playback.currentStep}
+              isPlaying={musicUiState.playback.isPlaying}
               selected={musicUiState.selectedTrackId === track.id}
               selectedEventStep={musicUiState.selectedEventStep}
               busy={busy}
@@ -1502,6 +1511,7 @@ function TrackRow({
   trackActivity,
   totalSteps,
   activeStep,
+  isPlaying,
   selected,
   selectedEventStep,
   busy,
@@ -1521,6 +1531,7 @@ function TrackRow({
   onSoundChange,
   onToggleDrumStep,
 }) {
+  const laneRef = useRef(null);
   const isSampler = track.instrument === "sampler";
   const sounds = soundsForInstrument(catalog, track.instrument);
   const activity = trackActivity ?? { activeEventSteps: [], meterLevel: 0, peakLevel: 0, muted: Boolean(track.muted) };
@@ -1532,6 +1543,26 @@ function TrackRow({
     if (!eventsByStep.has(event.step)) eventsByStep.set(event.step, []);
     eventsByStep.get(event.step).push(event);
   }
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const lane = laneRef.current;
+    if (!lane || lane.scrollWidth <= lane.clientWidth || totalSteps <= 0) return;
+
+    const cellWidth = lane.scrollWidth / totalSteps;
+    const activeLeft = activeStep * cellWidth;
+    const activeRight = activeLeft + cellWidth;
+    const guard = Math.min(96, lane.clientWidth * 0.24);
+    const visibleLeft = lane.scrollLeft + guard;
+    const visibleRight = lane.scrollLeft + lane.clientWidth - guard;
+
+    if (activeLeft >= visibleLeft && activeRight <= visibleRight) return;
+
+    lane.scrollTo({
+      left: Math.max(0, activeLeft - lane.clientWidth * 0.36),
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
+  }, [activeStep, isPlaying, totalSteps]);
 
   return (
     <article
@@ -1618,7 +1649,7 @@ function TrackRow({
       </div>
 
       {isSampler ? (
-        <div className="lane">
+        <div className="lane" ref={laneRef}>
           <div className="lane-sampler" style={laneStyle}>
             {Array.from({ length: totalSteps }).map((_, index) => {
               const events = eventsByStep.get(index) ?? [];
@@ -1639,7 +1670,7 @@ function TrackRow({
           </div>
         </div>
       ) : (
-        <div className="lane">
+        <div className="lane" ref={laneRef}>
           <div className="lane-notes" style={laneStyle}>
             {Array.from({ length: totalSteps }).map((_, index) => (
               <i className={`${index === activeStep ? "is-active" : ""} ${selected && selectedEventStep === index ? "is-selected" : ""}`} key={index} />

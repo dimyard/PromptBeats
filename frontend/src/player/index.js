@@ -42,6 +42,15 @@ export function createPlayer() {
 
   const emit = (ev, payload) => (listeners[ev] || []).forEach((cb) => cb(payload));
 
+  function currentTransportStep() {
+    const [bars = 0, quarters = 0, sixteenths = 0] = String(Tone.Transport.position)
+      .split(":")
+      .map(Number);
+    const rawStep = ((bars * 4 + quarters) * 4 + Math.floor(sixteenths)) % totalSteps;
+    if (!Number.isFinite(rawStep)) return 0;
+    return Math.min(totalSteps - 1, Math.max(0, rawStep));
+  }
+
   function teardown({ clearStepScheduler = false } = {}) {
     if (clearStepScheduler && stepEventId !== null) {
       Tone.Transport.clear(stepEventId);
@@ -104,9 +113,7 @@ export function createPlayer() {
     if (stepEventId !== null) return;
     stepEventId = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        const [b, q, s] = Tone.Transport.position.split(":").map(Number);
-        const step = ((b * 4 + q) * 4 + Math.floor(s)) % totalSteps;
-        emit("step", step);
+        emit("step", currentTransportStep());
       }, time);
     }, "16n");
   }
@@ -217,6 +224,7 @@ export function createPlayer() {
 
       ensureStepScheduler();
 
+      emit("step", preservePosition ? currentTransportStep() : 0);
       emit("ready", { totalSteps });
       if (wasPlaying && !preservePosition) await play();
     } catch (err) {
