@@ -77,6 +77,16 @@
   `tokens.semantic`/`tokens.state` использовать для адаптивного visual layer.
 - **Отклонения от контракта:** нет.
 - **Известные баги / TODO:** генератор `tokens.css` пока не добавлен; при необходимости сделать отдельным маленьким скриптом.
+### 2026-07-11 · Контракт ручных BPM и Bars для A · C/A
+- **Что сделано:** уточнён существующий MVP-поток ручной правки Song JSON: A может менять BPM и Bars через
+  `player.load(updatedSong)` наряду с дорожечными `muted`, `gain`, `sound` и `events`. Зафиксирована нормализация
+  событий при уменьшении Bars; editable key отложен, потому что абсолютные ноты не транспонируются автоматически.
+- **Где:** `CONTRACTS.md`, `briefs/BRIEF_A_FRONTEND.md`, `docs/design/STAGE3_CLAUDE_DESIGN_PROMPT.md`.
+- **Публичный интерфейс:** Player API и Song JSON v1 не менялись.
+- **Как использовать:** A коммитит полный валидный `updatedSong` и вызывает `await player.load(updatedSong)`.
+- **Отклонения от контракта:** нет; добавлена документация существующего поведения. Убран устаревший sound `chord_keys`
+  из дизайн-промпта, потому что его нет в каталоге.
+- **Известные баги / TODO:** для editable key понадобится отдельная логика транспозиции synth-событий.
 
 ### 2026-07-11 · Windows fix для one-command launcher · Codex
 - **Что сделано:** исправлен `spawn EINVAL` при `npm run dev` в Windows PowerShell. Launcher теперь запускает `npm`

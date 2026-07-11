@@ -24,7 +24,12 @@ PromptBeats - браузерный AI beat sketcher:
 - Поле `track.role` обязательно.
 - Старые поля `pattern` и `notes` не использовать вообще.
 - Manual controls не добавляют новые Player API.
-- Для ручных правок UI должен менять `currentSong.track.muted`, `currentSong.track.gain`, `currentSong.track.sound`, `currentSong.track.events`, затем вызывать `player.load(updatedSong)`.
+- Для ручных правок UI должен менять `currentSong.bpm`, `currentSong.bars`, `currentSong.tracks[].muted`,
+  `currentSong.tracks[].gain`, `currentSong.tracks[].sound`, `currentSong.tracks[].events`, затем вызывать
+  `player.load(updatedSong)`.
+- BPM допустим только в диапазоне `40..220`; Bars - целое число `1..32`. При уменьшении Bars UI удаляет события за
+  новым концом лупа и клампит `dur` оставшихся событий.
+- Key пока только информационный chip: не проектируй editable key, потому что Player не транспонирует абсолютные ноты.
 
 Не проектируй функции, которые требуют нового backend/player контракта. Export WAV можно показать disabled/stretch.
 
@@ -47,9 +52,9 @@ PromptBeats - браузерный AI beat sketcher:
 - Play icon button.
 - Stop icon button.
 - Loop toggle.
-- BPM display/stepper.
-- Key chip.
-- Bars chip.
+- Интерактивный BPM stepper (`40..220`), который коммитит полное обновление Song.
+- Read-only Key chip.
+- Интерактивный Bars selector (`1..32`), который меняет размер step-grid и нормализует события при уменьшении длины.
 - Status dot: `Готово`, `Играет`, `Генерация`, `Ошибка`.
 
 Большая live-визуализация:
@@ -86,9 +91,11 @@ Track lanes:
 
 - Mute/unmute track.
 - Gain slider на дорожке.
+- BPM stepper и Bars selector: меняют Song JSON, после коммита вызывают `player.load(updatedSong)`; не добавляют
+  live-control методы в Player.
 - Sound selector из фиксированного каталога:
   - sampler: `lofi_kit`, `house_kit`, `trap_kit`.
-  - synth: `sine_bass`, `soft_pad`, `pluck`, `chord_keys`.
+  - synth: `sine_bass`, `saw_lead`, `square_lead`, `soft_pad`, `pluck`, `fm_bell`.
 - Для drums: клик по step cell включает/выключает hit.
 - Для synth tracks: только визуализация note blocks; редактирование нот можно показать как future/disabled.
 
@@ -184,6 +191,8 @@ Track lanes:
 - Play/Stop меняют визуальный статус.
 - Mute/gain/sound controls визуально обновляют дорожку.
 - Drum grid cells toggle hit state.
+- BPM и Bars controls обновляют summary, размер сетки и JSON preview; при уменьшении Bars старые события за лупом
+  больше не показываются.
 - Inspector показывает актуальный JSON preview.
 - Error/generating states можно включить через mock controls или scripted demo.
 
