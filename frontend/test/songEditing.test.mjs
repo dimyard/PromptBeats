@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addTrack,
   setSongBars,
   setSongBpm,
   setTrackGain,
@@ -71,5 +72,14 @@ describe("song editing helpers", () => {
     assert.equal(added.tracks[0].events.some((event) => event.step === 4 && event.note === "F#2"), true);
     const removed = toggleDrumStep(added, "drums", 4, "F#2");
     assert.equal(removed.tracks[0].events.some((event) => event.step === 4 && event.note === "F#2"), false);
+  });
+
+  it("adds a compatible empty track with a unique id", () => {
+    const next = addTrack(song, { role: "drums", instrument: "sampler", sound: "trap_kit" });
+    const added = next.tracks.at(-1);
+    assert.equal(added.id, "drums_2");
+    assert.equal(added.instrument, "sampler");
+    assert.equal(added.sound, "trap_kit");
+    assert.deepEqual(added.events, []);
   });
 });

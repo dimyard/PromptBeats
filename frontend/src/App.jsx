@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { compose, getCatalog } from "./api.js";
 import { createPlayer } from "./player/index.js";
 import {
+  addTrack,
   DRUM_NOTE_LABELS,
   DRUM_NOTES,
   FALLBACK_CATALOG,
@@ -37,6 +38,11 @@ const ROLE_LABELS = {
 
 const BAR_OPTIONS = [1, 2, 4, 8, 16, 32];
 const VISUAL_BARS = 40;
+const DEFAULT_ADD_TRACK = {
+  role: "lead",
+  instrument: "synth",
+  sound: "pluck",
+};
 
 function copySong(source) {
   return JSON.parse(JSON.stringify(source));
@@ -92,6 +98,7 @@ export default function App() {
   const [lastPrompt, setLastPrompt] = useState("");
   const [lastError, setLastError] = useState("");
   const [drumNotes, setDrumNotes] = useState({});
+  const [trackDraft, setTrackDraft] = useState(DEFAULT_ADD_TRACK);
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -100,6 +107,7 @@ export default function App() {
   const status = busy ? "Генерация" : playing ? "Играет" : song ? "Готово" : "Пусто";
   const statusKind = busy ? "loading" : playing ? "playing" : song ? "ready" : "empty";
   const mood = songMood(song);
+  const draftSounds = soundsForInstrument(catalog, trackDraft.instrument);
 
   const songSummary = useMemo(() => {
     if (!song) return "Song JSON ещё не загружен";
@@ -287,6 +295,25 @@ export default function App() {
     setStep(0);
   }
 
+  function updateTrackDraft(patch) {
+    setTrackDraft((current) => {
+      const next = { ...current, ...patch };
+      const sounds = soundsForInstrument(catalog, next.instrument);
+      return {
+        ...next,
+        sound: sounds.includes(next.sound) ? next.sound : sounds[0],
+        role: next.instrument === "sampler" && !patch.role ? "drums" : next.role,
+      };
+    });
+  }
+
+  function addDraftTrack() {
+    applySongEdit(
+      (current) => addTrack(current, trackDraft, catalog),
+      `Добавлена дорожка ${ROLE_LABELS[trackDraft.role] ?? trackDraft.role}`,
+    );
+  }
+
   return (
     <main className={`app-shell theme-${mood}`} style={{ "--active-opacity": 0.45 + activeSnapshot.energy * 0.4 }}>
       <section className="chat-panel" aria-label="Чат">
@@ -398,6 +425,53 @@ export default function App() {
         <LiveVisualizer busy={busy} playing={playing} bars={visualBars} activeTracks={activeSnapshot.tracks} />
 
         <section className="track-grid" aria-label="Дорожки">
+          <div className="track-toolbar">
+            <div>
+              <p className="eyebrow">Tracks</p>
+              <h3>{song ? `${song.tracks.length} дорожки` : "Дорожки"}</h3>
+            </div>
+            <div className="add-track-controls" aria-label="Добавить дорожку">
+              <label>
+                <span>role</span>
+                <select value={trackDraft.role} onChange={(event) => updateTrackDraft({ role: event.target.value })} disabled={!song || busy}>
+                  {(catalog.roles ?? FALLBACK_CATALOG.roles).map((role) => (
+                    <option value={role} key={role}>
+                      {ROLE_LABELS[role] ?? role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>instrument</span>
+                <select
+                  value={trackDraft.instrument}
+                  onChange={(event) =>
+                    updateTrackDraft({
+                      instrument: event.target.value,
+                      role: event.target.value === "sampler" ? "drums" : trackDraft.role,
+                    })
+                  }
+                  disabled={!song || busy}
+                >
+                  <option value="synth">synth</option>
+                  <option value="sampler">sampler</option>
+                </select>
+              </label>
+              <label>
+                <span>sound</span>
+                <select value={trackDraft.sound} onChange={(event) => updateTrackDraft({ sound: event.target.value })} disabled={!song || busy}>
+                  {draftSounds.map((sound) => (
+                    <option value={sound} key={sound}>
+                      {sound}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="add-track-button" type="button" onClick={addDraftTrack} disabled={!song || busy}>
+                + Дорожка
+              </button>
+            </div>
+          </div>
           {(song?.tracks ?? []).map((track) => (
             <TrackRow
               key={track.id}

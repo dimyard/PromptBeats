@@ -40,6 +40,19 @@
 
 ## Записи
 
+### 2026-07-11 · Stage 3 visual feedback build · A / UX-Front
+- **Что сделано:** сглажены движения visualizer/meters/lanes, исправлена стабильность drum lane grid без накопительного
+  gap, добавлен toolbar «Tracks» и добавление новой пустой дорожки с выбором `role`, `instrument` и совместимого `sound`.
+- **Где:** `frontend/src/App.jsx`, `frontend/src/styles.css`, `frontend/src/songEditing.js`,
+  `frontend/test/songEditing.test.mjs`.
+- **Публичный интерфейс:** контрактов не менял; новая дорожка добавляется в `currentSong.tracks`, затем применяется через
+  существующий `player.load(updatedSong)`.
+- **Как использовать:** загрузить «Пример», выбрать role/instrument/sound в toolbar над дорожками и нажать `+ Дорожка`;
+  sampler-дорожку можно сразу наполнять кликами по step grid.
+- **Отклонения от контракта:** нет.
+- **Проверено:** `cd frontend && npm test` (6/6), `cd frontend && npm run build`.
+- **Известные баги / TODO:** добавленная synth-дорожка пока пустая и редактируется только через будущие note controls/LLM.
+
 ### 2026-07-11 · Этап 3 фронта: studio UI и ручные контролы · A / UX-Front
 - **Что сделано:** реализован stage 3 UI по дизайн-системе: трёхзонный shell chat/studio/inspector, live visualizer,
   track lanes, Song JSON inspector, BPM stepper, Bars selector с нормализацией, mute/gain/sound controls и drum step

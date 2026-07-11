@@ -63,6 +63,49 @@ export function updateTrack(song, trackId, patcher) {
   };
 }
 
+function slugPart(value) {
+  return String(value ?? "track")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 28) || "track";
+}
+
+export function uniqueTrackId(song, preferred) {
+  const base = slugPart(preferred);
+  const used = new Set((song.tracks ?? []).map((track) => track.id));
+  if (!used.has(base)) return base;
+  for (let index = 2; index < 100; index += 1) {
+    const candidate = `${base}_${index}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${base}_${Date.now().toString(36)}`;
+}
+
+export function createTrack(song, { role = "lead", instrument = "synth", sound } = {}, catalog = FALLBACK_CATALOG) {
+  const allowedSounds = soundsForInstrument(catalog, instrument);
+  const nextSound = allowedSounds.includes(sound) ? sound : allowedSounds[0];
+  const id = uniqueTrackId(song, role);
+  return {
+    id,
+    role,
+    instrument,
+    sound: nextSound,
+    gain: instrument === "sampler" ? 0.82 : 0.7,
+    muted: false,
+    events: [],
+  };
+}
+
+export function addTrack(song, options, catalog = FALLBACK_CATALOG) {
+  const track = createTrack(song, options, catalog);
+  return {
+    ...song,
+    tracks: [...(song.tracks ?? []), track],
+  };
+}
+
 export function setTrackMuted(song, trackId, muted) {
   return updateTrack(song, trackId, (track) => ({ ...track, muted: Boolean(muted) }));
 }

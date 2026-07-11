@@ -537,9 +537,9 @@ summary:focus-visible {
   background: var(--mood);
   opacity: var(--active-opacity, 0.58);
   transition:
-    height 120ms ease,
-    background 180ms ease,
-    opacity 180ms ease;
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 220ms ease,
+    opacity 220ms ease;
 }
 
 .visualizer.is-generating .eq-bars i {
@@ -563,6 +563,76 @@ summary:focus-visible {
   min-height: 0;
   overflow: auto;
   padding: 0 1rem 1rem;
+  scroll-behavior: smooth;
+}
+
+.track-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.track-toolbar h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.add-track-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.add-track-controls label {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 7rem;
+}
+
+.add-track-controls span {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.add-track-controls select,
+.add-track-button {
+  min-height: 1.95rem;
+  border: 1px solid var(--line);
+  border-radius: 0.38rem;
+  color: var(--muted);
+  background: var(--raised);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.add-track-controls select {
+  padding: 0 0.45rem;
+}
+
+.add-track-button {
+  align-self: end;
+  padding: 0 0.75rem;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 650;
+}
+
+.add-track-button:hover:not(:disabled) {
+  border-color: var(--lime);
+  color: var(--lime);
 }
 
 .track-row {
@@ -575,6 +645,11 @@ summary:focus-visible {
   border-radius: 0.55rem;
   background: rgba(26, 29, 33, 0.92);
   overflow: hidden;
+  transition:
+    box-shadow 180ms ease,
+    opacity 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
 }
 
 .role-drums {
@@ -712,7 +787,7 @@ summary:focus-visible {
   margin-top: auto;
   border-radius: inherit;
   background: linear-gradient(to top, var(--lime), var(--amber));
-  transition: height 120ms ease;
+  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lane {
@@ -723,12 +798,19 @@ summary:focus-visible {
   border: 1px solid var(--line-soft);
   border-radius: 0.45rem;
   overflow: hidden;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
 }
 
-.lane-sampler {
+.lane-sampler,
+.lane-notes {
   display: grid;
-  grid-template-columns: repeat(var(--steps), minmax(1.45rem, 1fr));
-  gap: 1px;
+  grid-template-columns: repeat(var(--steps), minmax(0, 1fr));
+  width: max(100%, var(--lane-min-width));
+  min-width: var(--lane-min-width);
+  height: 2.7rem;
 }
 
 .step-button {
@@ -743,6 +825,10 @@ summary:focus-visible {
   font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 700;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .step-button:nth-child(4n) {
@@ -760,14 +846,11 @@ summary:focus-visible {
   background-color: rgba(255, 200, 87, 0.2);
 }
 
-.lane-notes {
-  display: grid;
-  grid-template-columns: repeat(var(--steps), minmax(1.45rem, 1fr));
-  height: 2.7rem;
-}
-
 .lane-notes > i {
   border-right: 1px solid var(--line-soft);
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .lane-notes > i:nth-child(4n) {
@@ -790,6 +873,10 @@ summary:focus-visible {
   font-weight: 700;
   opacity: var(--note-opacity, 0.82);
   pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
   white-space: nowrap;
 }
 
@@ -977,6 +1064,15 @@ summary:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .track-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .add-track-controls {
+    justify-content: flex-start;
+  }
+
   .track-info {
     border-right: 0;
     border-bottom: 1px solid var(--line-soft);
@@ -1007,5 +1103,16 @@ summary:focus-visible {
   .lane-sampler,
   .lane-notes {
     min-width: var(--lane-min-width);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
