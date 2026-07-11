@@ -1,128 +1,310 @@
 // PromptBeats UI. Owner: Human A. Chat -> /api/compose -> player.load -> play.
-// Minimal but end-to-end. Style/track-grid polish is A's job.
-import { useEffect, useRef, useState } from "react";
+// Stage 2: demo fallback, visible errors, chat polish, and transport state.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { compose } from "./api.js";
 import { createPlayer } from "./player/index.js";
+import sampleSong from "../../sample-song.json";
+import "./styles.css";
+
+const DEMO_PROMPTS = [
+  "Спокойный lo-fi бит, 75 BPM, минор",
+  "Добавь мягкий pad",
+  "Ускорь до 90 и сделай бас громче",
+];
+
+const ROLE_LABELS = {
+  drums: "Барабаны",
+  bass: "Бас",
+  chords: "Аккорды",
+  lead: "Лид",
+  pad: "Пэд",
+  fx: "FX",
+};
+
+const DRUM_LABELS = {
+  C2: "K",
+  D2: "S",
+  "D#2": "C",
+  "F#2": "H",
+  "A#2": "O",
+  E2: "T",
+  "C#3": "R",
+};
+
+function makeMessage(role, text) {
+  return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text };
+}
+
+function friendlyError(error) {
+  const message = error?.message ?? String(error);
+  if (message === "Failed to fetch") {
+    return "Бэкенд недоступен. Можно продолжить через кнопку «Пример».";
+  }
+  return message;
+}
+
+function formatBars(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} такт`;
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return `${count} такта`;
+  return `${count} тактов`;
+}
 
 export default function App() {
-  const [messages, setMessages] = useState([]); // {role, text}
+  const [messages, setMessages] = useState([
+    makeMessage(
+      "assistant",
+      "Опиши трек или нажми «Пример», чтобы загрузить демо без бэкенда.",
+    ),
+  ]);
   const [input, setInput] = useState("");
   const [song, setSong] = useState(null);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [step, setStep] = useState(0);
+  const [toast, setToast] = useState("");
   const playerRef = useRef(null);
+  const logRef = useRef(null);
+  const toastTimerRef = useRef(null);
+
+  const totalSteps = song ? song.bars * 16 : 16;
+  const status = busy ? "Генерация" : playing ? "Играет" : song ? "Готово" : "Пусто";
+  const statusKind = busy ? "loading" : playing ? "playing" : song ? "ready" : "empty";
+
+  const songSummary = useMemo(() => {
+    if (!song) return "Song JSON ещё не загружен";
+    return `${song.title ?? "untitled"} · ${song.bpm} BPM · ${song.key ?? "no key"} · ${formatBars(song.bars)}`;
+  }, [song]);
 
   useEffect(() => {
     const p = createPlayer();
     const offStep = p.on("step", setStep);
-    const offErr = p.on("error", (e) => console.warn("player:", e));
+    const offErr = p.on("error", (e) => {
+      showToast(e.message || "Ошибка плеера");
+    });
     playerRef.current = p;
-    return () => { offStep(); offErr(); p.dispose(); };
+    return () => {
+      offStep();
+      offErr();
+      p.dispose();
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
-  async function send() {
-    const prompt = input.trim();
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, busy]);
+
+  function showToast(message) {
+    setToast(message);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(""), 3600);
+  }
+
+  async function loadSong(nextSong, message) {
+    setSong(nextSong);
+    setStep(0);
+    await playerRef.current.load(nextSong);
+    if (message) {
+      setMessages((current) => [...current, makeMessage("assistant", message)]);
+    }
+  }
+
+  async function loadExample() {
+    if (busy) return;
+    try {
+      await loadSong(sampleSong, "Загрузил демо-трек из sample-song.json. Можно нажимать Play.");
+      showToast("Пример загружен");
+    } catch (error) {
+      const message = friendlyError(error);
+      setMessages((current) => [...current, makeMessage("error", message)]);
+      showToast(message);
+    }
+  }
+
+  async function send(promptOverride) {
+    const prompt = (promptOverride ?? input).trim();
     if (!prompt || busy) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", text: prompt }]);
+    setMessages((current) => [...current, makeMessage("user", prompt)]);
     setBusy(true);
     try {
-      const { song: next, message } = await compose(prompt, song); // edit if song exists
-      setSong(next);
-      setMessages((m) => [...m, { role: "assistant", text: message || "Готово." }]);
-      await playerRef.current.load(next);
-    } catch (e) {
-      setMessages((m) => [...m, { role: "error", text: e.message }]);
+      const { song: next, message } = await compose(prompt, song);
+      await loadSong(next, message || "Готово. Song JSON обновлён.");
+    } catch (error) {
+      const message = friendlyError(error);
+      setMessages((current) => [...current, makeMessage("error", message)]);
+      showToast(message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function togglePlay() {
-    const p = playerRef.current;
-    if (playing) { p.stop(); setPlaying(false); }
-    else { await p.play(); setPlaying(true); }
+  async function play() {
+    if (!song || busy) return;
+    try {
+      await playerRef.current.play();
+      setPlaying(true);
+    } catch (error) {
+      const message = friendlyError(error);
+      setMessages((current) => [...current, makeMessage("error", message)]);
+      showToast(message);
+    }
   }
 
-  const totalSteps = song ? song.bars * 16 : 16;
+  function stop() {
+    playerRef.current?.stop();
+    setPlaying(false);
+  }
 
   return (
-    <div style={S.app}>
-      <div style={S.chat}>
-        <h1 style={S.h1}>PromptBeats</h1>
-        <div style={S.log}>
-          {messages.map((m, i) => (
-            <div key={i} style={{ ...S.msg, ...S[m.role] }}>{m.text}</div>
+    <main className="app-shell">
+      <section className="chat-panel" aria-label="Чат">
+        <header className="brand-row">
+          <div>
+            <p className="eyebrow">AI beat sketcher</p>
+            <h1>PromptBeats</h1>
+          </div>
+          <span className={`status-pill status-${statusKind}`}>{status}</span>
+        </header>
+
+        <div className="message-log" ref={logRef}>
+          {messages.map((message) => (
+            <article className={`message message-${message.role}`} key={message.id}>
+              <span className="message-author">
+                {message.role === "user" ? "Ты" : message.role === "error" ? "Ошибка" : "PromptBeats"}
+              </span>
+              <p>{message.text}</p>
+            </article>
           ))}
-          {busy && <div style={{ ...S.msg, ...S.assistant }}>…</div>}
-        </div>
-        <div style={S.inputRow}>
-          <input
-            style={S.input}
-            value={input}
-            placeholder={song ? "Правка: «добавь пэд», «быстрее»…" : "Опиши трек: «спокойный лоу-фай, 75 BPM»"}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-          />
-          <button style={S.btn} onClick={send} disabled={busy}>➤</button>
-        </div>
-      </div>
-
-      <div style={S.stage}>
-        <div style={S.controls}>
-          <button style={S.play} onClick={togglePlay} disabled={!song}>
-            {playing ? "■ Stop" : "▶ Play"}
-          </button>
-          {song && <span style={S.meta}>{song.title} · {song.bpm} BPM · {song.key}</span>}
+          {busy && (
+            <article className="message message-assistant">
+              <span className="message-author">PromptBeats</span>
+              <p>Собираю новый Song JSON...</p>
+            </article>
+          )}
         </div>
 
-        {/* Track grid — A: make this prettier. Shows events on the step grid. */}
-        <div style={S.grid}>
-          {(song?.tracks ?? []).map((t) => {
-            const hit = new Set(t.events.map((e) => e.step));
-            return (
-              <div key={t.id} style={S.trackRow}>
-                <div style={S.trackName}>{t.id}</div>
-                <div style={S.steps}>
-                  {Array.from({ length: totalSteps }).map((_, i) => (
-                    <div key={i} style={{
-                      ...S.cell,
-                      background: hit.has(i) ? "#6c8cff" : "#20232e",
-                      outline: i === step ? "2px solid #ffd76c" : "none",
-                    }} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {!song && <p style={S.hint}>Опиши трек слева, чтобы начать.</p>}
+        <div className="prompt-area">
+          <div className="prompt-chips" aria-label="Демо-промпты">
+            {DEMO_PROMPTS.map((prompt) => (
+              <button type="button" key={prompt} onClick={() => send(prompt)} disabled={busy}>
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              send();
+            }}
+          >
+            <input
+              value={input}
+              placeholder={song ? "Правка: «добавь хэты», «быстрее»..." : "Опиши трек: «спокойный lo-fi, 75 BPM»"}
+              onChange={(event) => setInput(event.target.value)}
+              disabled={busy}
+            />
+            <button type="submit" disabled={busy || !input.trim()}>
+              Отправить
+            </button>
+          </form>
         </div>
-      </div>
+      </section>
+
+      <section className="studio-panel" aria-label="Студия">
+        <header className="transport">
+          <div>
+            <p className="eyebrow">Текущий трек</p>
+            <h2>{song?.title ?? "Нет загруженного трека"}</h2>
+            <p className="song-summary">{songSummary}</p>
+          </div>
+
+          <div className="transport-actions">
+            <button className="secondary-button" type="button" onClick={loadExample} disabled={busy}>
+              Пример
+            </button>
+            <button className="play-button" type="button" onClick={play} disabled={!song || busy || playing}>
+              Play
+            </button>
+            <button className="stop-button" type="button" onClick={stop} disabled={!song || !playing}>
+              Stop
+            </button>
+          </div>
+        </header>
+
+        <div className="meta-grid" aria-label="Метаданные трека">
+          <MetaCard label="BPM" value={song?.bpm ?? "-"} />
+          <MetaCard label="Key" value={song?.key ?? "-"} />
+          <MetaCard label="Bars" value={song?.bars ?? "-"} />
+          <MetaCard label="Step" value={song ? `${step + 1}/${totalSteps}` : "-"} />
+        </div>
+
+        <section className="track-grid" aria-label="Дорожки">
+          {(song?.tracks ?? []).map((track) => (
+            <TrackRow key={track.id} track={track} totalSteps={totalSteps} activeStep={step} />
+          ))}
+          {!song && (
+            <div className="empty-state">
+              <h3>Начни с промпта или примера</h3>
+              <p>Кнопка «Пример» загрузит локальный Song JSON, даже если бэкенд ещё не поднят.</p>
+            </div>
+          )}
+        </section>
+      </section>
+
+      {toast && <div className="toast">{toast}</div>}
+    </main>
+  );
+}
+
+function MetaCard({ label, value }) {
+  return (
+    <div className="meta-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
 
-const S = {
-  app: { display: "flex", height: "100vh", fontFamily: "system-ui, sans-serif", color: "#e8e8ef", background: "#12141c" },
-  chat: { width: 360, display: "flex", flexDirection: "column", borderRight: "1px solid #262a37", padding: 16 },
-  h1: { margin: "0 0 12px", fontSize: 20 },
-  log: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 },
-  msg: { padding: "8px 12px", borderRadius: 12, maxWidth: "90%", fontSize: 14, lineHeight: 1.35 },
-  user: { alignSelf: "flex-end", background: "#6c8cff", color: "#fff" },
-  assistant: { alignSelf: "flex-start", background: "#20232e" },
-  error: { alignSelf: "flex-start", background: "#5a2330", color: "#ffd0d0" },
-  inputRow: { display: "flex", gap: 8, marginTop: 12 },
-  input: { flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid #2c313f", background: "#1a1d27", color: "#fff" },
-  btn: { padding: "0 16px", borderRadius: 10, border: "none", background: "#6c8cff", color: "#fff", cursor: "pointer" },
-  stage: { flex: 1, padding: 24, display: "flex", flexDirection: "column", gap: 20 },
-  controls: { display: "flex", alignItems: "center", gap: 16 },
-  play: { padding: "10px 20px", borderRadius: 10, border: "none", background: "#2fbf71", color: "#fff", fontSize: 16, cursor: "pointer" },
-  meta: { opacity: 0.8 },
-  grid: { display: "flex", flexDirection: "column", gap: 8 },
-  trackRow: { display: "flex", alignItems: "center", gap: 12 },
-  trackName: { width: 70, fontSize: 13, opacity: 0.85 },
-  steps: { display: "flex", gap: 2, flexWrap: "wrap" },
-  cell: { width: 18, height: 24, borderRadius: 3 },
-  hint: { opacity: 0.6 },
-};
+function TrackRow({ track, totalSteps, activeStep }) {
+  const eventsByStep = new Map();
+  for (const event of track.events ?? []) {
+    if (!eventsByStep.has(event.step)) eventsByStep.set(event.step, []);
+    eventsByStep.get(event.step).push(event);
+  }
+
+  return (
+    <article className={`track-row role-${track.role}`}>
+      <div className="track-info">
+        <strong>{ROLE_LABELS[track.role] ?? track.role ?? track.id}</strong>
+        <span>{track.sound}</span>
+        <small>
+          gain {track.gain ?? 0.8}
+          {track.muted ? " · muted" : ""}
+        </small>
+      </div>
+      <div className="steps" style={{ "--steps": totalSteps }}>
+        {Array.from({ length: totalSteps }).map((_, index) => {
+          const events = eventsByStep.get(index) ?? [];
+          const label = events
+            .map((event) => DRUM_LABELS[event.note] ?? event.note)
+            .slice(0, 2)
+            .join(" ");
+          return (
+            <span
+              className={`step-cell ${events.length ? "has-event" : ""} ${index === activeStep ? "is-active" : ""}`}
+              key={index}
+              title={events.map((event) => `${event.note}, dur ${event.dur ?? 1}, vel ${event.vel ?? 0.8}`).join("\n")}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+    </article>
+  );
+}

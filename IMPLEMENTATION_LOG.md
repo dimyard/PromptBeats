@@ -99,6 +99,19 @@
   production-сборка Vite не получила ответ от проверки разрешений, поэтому остаётся прогнать `npm run build`
   и браузерный smoke-check на машине разработчика.
 
+### 2026-07-11 · Этап 2 фронта: fallback, ошибки и demo UX · A / UX-Front
+- **Что сделано:** добавлены fallback «Пример» на `sample-song.json`, видимые backend/player ошибки через toast и
+  историю, автоскролл чата, demo prompt chips, статус `Пусто/Генерация/Готово/Играет`, отдельный Play/Stop transport
+  и более читаемый grid дорожек по `tracks[].events`.
+- **Где:** `frontend/src/App.jsx`, `frontend/src/styles.css`, `frontend/package-lock.json`.
+- **Публичный интерфейс:** контрактов нетронуто; фронт по-прежнему использует `compose(prompt, currentSong)` и
+  `createPlayer().load/play/stop/on`.
+- **Как использовать:** `cd frontend && npm install && npm run dev`, открыть `http://127.0.0.1:5173/`.
+  Для демо без бэка нажать «Пример», затем `Play`. Для ошибки бэка отправить prompt при выключенном backend.
+- **Отклонения от контракта:** нет.
+- **Проверено:** `npm run build` проходит; локальный Vite отвечает `HTTP 200` на `http://127.0.0.1:5173/`.
+- **Известные баги / TODO:** этап 3 — ручные контролы `mute/gain/step edit`, каталог звуков и более глубокая полировка grid.
+
 ### 2026-07-11 · Этап 1 фронта: ревизия A · A / UX-Front
 - **Что сделано:** выполнена ревизия текущего `frontend/` перед кодингом: проверены `App.jsx`, `api.js`, README,
   `sample-song.json`, контракт Player и brief A; зафиксированы соответствия, пробелы и очередь этапа 2.
