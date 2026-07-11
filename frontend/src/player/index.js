@@ -2,6 +2,7 @@
 // Pure browser, no network. Input is only a Song JSON object.
 import * as Tone from "tone";
 import { makeSynth, makeKit, isKit } from "./sounds.js";
+import { audioBufferToWav } from "./wav.js";
 
 /** step index -> Tone transport time (16th-note grid). */
 const stepToTime = (step) => {
@@ -36,6 +37,7 @@ export function createPlayer() {
   let stepEventId = null;
   let totalSteps = 16;
   let playing = false;
+  let lastSong = null;
   const listeners = { step: [], ready: [], error: [] };
 
   const emit = (ev, payload) => (listeners[ev] || []).forEach((cb) => cb(payload));
@@ -72,6 +74,7 @@ export function createPlayer() {
   async function load(song) {
     try {
       const wasPlaying = playing;
+      lastSong = song;
       Tone.Transport.stop();
       teardown();
 
@@ -186,6 +189,77 @@ export function createPlayer() {
     emit("step", 0);
   }
 
+  /**
+   * Offline-render one loop of a Song to a PCM16 WAV Blob (Contract 4).
+   *
+   * Builds the same graph as {@link load} inside a `Tone.Offline` context, so
+   * `makeSynth`/`makeKit` bind to the offline context automatically. Uses the
+   * offline context's own transport (`ctx.transport`) — the live
+   * `Tone.Transport`/Destination and play/stop state are never touched, so this
+   * is safe to call during playback. Without a `song` argument it renders the
+   * last Song passed to `load`.
+   *
+   * Render length is exactly one loop: `bars * 4 * 60 / bpm` seconds. Synth
+   * release tails that cross the loop boundary are truncated (known MVP limit).
+   *
+   * @param {object} [song] Song JSON to render; defaults to the last loaded one.
+   * @returns {Promise<Blob>} a `Blob` with `type: "audio/wav"`.
+   */
+  async function exportWav(song) {
+    const source = song ?? lastSong;
+    if (!source) throw new Error("exportWav: no song to render (call load first)");
+
+    const bpm = numberInRange(source.bpm, DEFAULT_BPM, 40, MAX_BPM);
+    const steps = safeSteps(source.bars);
+    // One loop = steps sixteenth-notes = bars * 4 * 60 / bpm seconds.
+    const durationSec = (steps * (60 / bpm)) / 4;
+
+    const buffer = await Tone.Offline(async (ctx) => {
+      const transport = ctx.transport;
+      transport.bpm.value = bpm;
+
+      for (const track of source.tracks ?? []) {
+        const outputLevel = track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1);
+        // In an offline context toDestination() targets the offline destination.
+        const gain = new Tone.Gain(outputLevel).toDestination();
+
+        const wantsKit = track.instrument === "sampler";
+        let voice;
+        if (wantsKit) {
+          const kit = isKit(track.sound) ? track.sound : "lofi_kit";
+          voice = makeKit(kit, gain);
+        } else {
+          voice = makeSynth(isKit(track.sound) ? "pluck" : track.sound) ?? makeSynth("pluck");
+          voice.connect(gain);
+        }
+
+        const evts = [];
+        for (const e of track.events ?? []) {
+          if (typeof e.step !== "number" || e.step < 0 || e.step >= steps) continue;
+          const dur = Math.max(1, Math.min(numberInRange(e.dur, 1, 1, steps), steps - e.step));
+          evts.push([stepToTime(e.step), { ...e, dur }]);
+        }
+
+        const part = new Tone.Part((time, e) => {
+          const vel = e.vel ?? 0.8;
+          if (wantsKit) {
+            voice.trigger(e.note, time, vel);
+          } else {
+            const durSec = Tone.Time(`0:0:${e.dur}`).toSeconds();
+            voice.triggerAttackRelease(e.note, durSec, time, vel);
+          }
+        }, evts);
+        part.start(0);
+      }
+
+      transport.start(0);
+    }, durationSec);
+
+    // ToneAudioBuffer -> native AudioBuffer -> PCM16 WAV bytes.
+    const arrayBuffer = audioBufferToWav(buffer.get());
+    return new Blob([arrayBuffer], { type: "audio/wav" });
+  }
+
   return {
     load,
     play,
@@ -204,6 +278,6 @@ export function createPlayer() {
       stop();
       teardown();
     },
-    // exportWav(song) {}  // stretch goal — Tone.Offline render
+    exportWav,
   };
 }

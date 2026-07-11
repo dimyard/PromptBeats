@@ -1121,3 +1121,291 @@ summary:focus-visible {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---- Import / export ---------------------------------------------------- */
+/* Motion tokens from docs/design/promptbeats.design-tokens.json */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-pulse: 700ms;
+  --motion-flash: 160ms;
+}
+
+/* Export/import buttons live in the inspector; reuse the .export-button look. */
+.export-actions {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.export-button:not(:disabled) {
+  color: var(--text);
+  cursor: pointer;
+}
+
+.export-button:not(:disabled):hover {
+  border-color: var(--cyan);
+  border-style: solid;
+}
+
+.export-button.is-rendering {
+  color: var(--cyan);
+  border-color: rgba(53, 215, 255, 0.5);
+  border-style: solid;
+  animation: btn-pulse var(--motion-pulse) ease-in-out infinite;
+}
+
+.import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(9, 10, 11, 0.62);
+  backdrop-filter: blur(4px);
+  animation: overlay-in var(--motion-base) ease-out;
+}
+
+.import-overlay.state-dragover {
+  background: rgba(9, 10, 11, 0.72);
+}
+
+.import-dialog {
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid rgba(245, 242, 234, 0.12);
+  border-radius: 0.875rem;
+  padding: 1.1rem;
+  background: #1a1d21;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.5);
+  animation: dialog-in var(--motion-base) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.import-head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.import-close {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(245, 242, 234, 0.12);
+  border-radius: 0.4rem;
+  color: #aeb4bd;
+  background: #23272d;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+
+.import-close:hover {
+  color: #f5f2ea;
+  border-color: rgba(245, 242, 234, 0.28);
+}
+
+.drop-zone {
+  display: grid;
+  gap: 0.6rem;
+  place-items: center;
+  text-align: center;
+  border: 1.5px dashed rgba(245, 242, 234, 0.22);
+  border-radius: 0.75rem;
+  padding: 1.5rem 1rem;
+  color: #aeb4bd;
+  background: rgba(16, 17, 19, 0.5);
+  transition:
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.drop-zone p {
+  margin: 0;
+}
+
+.drop-hint-strong {
+  color: #f5f2ea;
+  font-weight: 700;
+}
+
+.drop-zone.state-dragover {
+  border-color: rgba(53, 215, 255, 0.8);
+  color: #35d7ff;
+  background: rgba(53, 215, 255, 0.1);
+}
+
+.drop-zone.state-parsing {
+  border-color: rgba(53, 215, 255, 0.5);
+  animation: dz-shimmer var(--motion-pulse) ease-in-out infinite;
+}
+
+.drop-zone.state-success {
+  border-color: rgba(183, 255, 90, 0.85);
+  color: #b7ff5a;
+  background: rgba(183, 255, 90, 0.12);
+  animation: dz-flash var(--motion-flash) ease-out;
+}
+
+.drop-zone.state-error {
+  border-color: rgba(255, 107, 95, 0.75);
+  background: rgba(255, 107, 95, 0.08);
+  animation: dz-shake 0.32s ease;
+}
+
+.import-or {
+  margin: 0.85rem 0 0.5rem;
+  color: #6e747d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.import-textarea {
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  border: 1px solid rgba(245, 242, 234, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  color: #f5f2ea;
+  background: #101113;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.8rem;
+  outline: none;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.import-textarea:focus {
+  border-color: rgba(53, 215, 255, 0.7);
+}
+
+.import-error {
+  margin: 0.6rem 0 0;
+  color: #ff6b5f;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.import-file-btn,
+.import-cancel {
+  min-height: 2.4rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  color: var(--muted);
+  background: var(--raised);
+  transition: border-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.import-file-btn:hover,
+.import-cancel:hover {
+  border-color: var(--cyan);
+  color: var(--text);
+}
+
+.import-submit {
+  min-height: 2.4rem;
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0 1.1rem;
+  color: #08252e;
+  background: var(--cyan);
+  font-weight: 800;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dz-shimmer {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes dz-flash {
+  from {
+    box-shadow: 0 0 0 0 rgba(183, 255, 90, 0.5);
+  }
+  to {
+    box-shadow: 0 0 0 0.7rem rgba(183, 255, 90, 0);
+  }
+}
+
+@keyframes dz-shake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  30%,
+  70% {
+    transform: translateX(3px);
+  }
+  50% {
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes btn-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .import-overlay,
+  .import-dialog,
+  .drop-zone.state-parsing,
+  .drop-zone.state-success,
+  .drop-zone.state-error,
+  .export-button.is-rendering {
+    animation: none !important;
+  }
+  .drop-zone,
+  .import-textarea,
+  .import-close {
+    transition: none;
+  }
+}

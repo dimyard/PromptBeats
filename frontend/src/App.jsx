@@ -18,8 +18,20 @@ import {
   toggleDrumStep,
   totalSteps as getTotalSteps,
 } from "./songEditing.js";
+import {
+  serializeSong,
+  parseSong,
+  songFilename,
+  downloadBlob,
+  readFileAsText,
+} from "./song-io.js";
 import sampleSong from "../../sample-song.json";
 import "./styles.css";
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 const DEMO_PROMPTS = [
   "Спокойный lo-fi бит, 75 BPM, минор",
@@ -99,9 +111,18 @@ export default function App() {
   const [lastError, setLastError] = useState("");
   const [drumNotes, setDrumNotes] = useState({});
   const [trackDraft, setTrackDraft] = useState(DEFAULT_ADD_TRACK);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importState, setImportState] = useState("idle"); // idle|dragover|parsing|success|error
+  const [rendering, setRendering] = useState(false);
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const dragDepthRef = useRef(0); // nested dragenter/dragleave counter
+  const dragOpenedRef = useRef(false); // overlay was opened by a drag, not the button
+  const importOpenRef = useRef(false); // latest importOpen for window listeners
 
   const totalSteps = song ? getTotalSteps(song) : 16;
   const status = busy ? "Генерация" : playing ? "Играет" : song ? "Готово" : "Пусто";
@@ -211,6 +232,67 @@ export default function App() {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
+  useEffect(() => {
+    importOpenRef.current = importOpen;
+  }, [importOpen]);
+
+  // Dragging a file anywhere over the app opens the (full-screen) import overlay;
+  // a nested dragenter/dragleave counter closes it again if the file leaves
+  // without being dropped. The overlay itself catches the actual drop.
+  useEffect(() => {
+    const hasFiles = (event) =>
+      Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const onDragEnter = (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      if (!importOpenRef.current) {
+        dragOpenedRef.current = true;
+        setImportOpen(true);
+      }
+      setImportState((current) => (current === "parsing" ? current : "dragover"));
+    };
+    const onDragOver = (event) => {
+      if (hasFiles(event)) event.preventDefault();
+    };
+    const onDragLeave = (event) => {
+      if (!hasFiles(event)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) {
+        if (dragOpenedRef.current) {
+          dragOpenedRef.current = false;
+          closeImport();
+        } else {
+          setImportState((current) => (current === "dragover" ? "idle" : current));
+        }
+      }
+    };
+    const onDrop = (event) => {
+      event.preventDefault(); // overlay handles real drops; keep the browser from navigating
+      dragDepthRef.current = 0;
+    };
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
+  // Esc closes the import overlay.
+  useEffect(() => {
+    if (!importOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") closeImport();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [importOpen]);
+
   function showToast(message) {
     setToast(message);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -312,6 +394,108 @@ export default function App() {
       (current) => addTrack(current, trackDraft, catalog),
       `Добавлена дорожка ${ROLE_LABELS[trackDraft.role] ?? trackDraft.role}`,
     );
+  }
+
+  function openImport() {
+    setImportError("");
+    setImportState("idle");
+    setImportOpen(true);
+  }
+
+  function closeImport() {
+    setImportOpen(false);
+    setImportState("idle");
+    setImportError("");
+    setImportText("");
+  }
+
+  // Shared import pipeline: raw text -> parse/validate/normalize -> load.
+  async function runImport(rawText) {
+    const text = (rawText ?? "").trim();
+    if (!text) {
+      setImportError("Пусто: вставь JSON или выбери файл.");
+      setImportState("error");
+      return;
+    }
+    const result = parseSong(text);
+    if (!result.ok) {
+      setImportError(result.error);
+      setImportState("error");
+      return;
+    }
+    setImportError("");
+    setImportState("success");
+    try {
+      if (!prefersReducedMotion()) await delay(200); // let the success flash paint
+      await loadSong(result.song, "Импортировал трек. Можно нажимать Play.");
+      setLastError("");
+      showToast(result.warnings?.[0] ?? "Импортировано");
+      closeImport();
+    } catch (error) {
+      setImportError(friendlyError(error));
+      setImportState("error");
+    }
+  }
+
+  async function importFromFile(file) {
+    if (!file) return;
+    setImportState("parsing");
+    try {
+      await runImport(await readFileAsText(file));
+    } catch (error) {
+      setImportError("Не удалось прочитать файл.");
+      setImportState("error");
+    }
+  }
+
+  function onOverlayDragOver(event) {
+    event.preventDefault();
+    setImportState((current) => (current === "parsing" ? current : "dragover"));
+  }
+
+  async function onOverlayDrop(event) {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    dragOpenedRef.current = false; // a drop commits the overlay
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      await importFromFile(file);
+      return;
+    }
+    setImportState("parsing");
+    await runImport(event.dataTransfer?.getData("text") ?? "");
+  }
+
+  function onFileChosen(event) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // allow re-picking the same file
+    importFromFile(file);
+  }
+
+  function exportJson() {
+    if (!song) return;
+    try {
+      const blob = new Blob([serializeSong(song)], { type: "application/json" });
+      downloadBlob(blob, songFilename(song, "json"));
+      showToast("JSON сохранён");
+    } catch (error) {
+      showToast(friendlyError(error));
+    }
+  }
+
+  async function exportWavFile() {
+    if (!song || rendering) return;
+    setRendering(true);
+    try {
+      const blob = await playerRef.current.exportWav(song);
+      downloadBlob(blob, songFilename(song, "wav"));
+      showToast("WAV сохранён");
+    } catch (error) {
+      console.error("exportWav failed:", error);
+      showToast("Не удалось сохранить аудио");
+    } finally {
+      setRendering(false);
+    }
   }
 
   return (
@@ -500,7 +684,77 @@ export default function App() {
         </section>
       </section>
 
-      <Inspector song={song} validation={validation} lastPrompt={lastPrompt} lastError={lastError} />
+      <Inspector
+        song={song}
+        validation={validation}
+        lastPrompt={lastPrompt}
+        lastError={lastError}
+        rendering={rendering}
+        onImport={openImport}
+        onExportJson={exportJson}
+        onExportWav={exportWavFile}
+      />
+
+      {importOpen && (
+        <div
+          className={`import-overlay state-${importState}`}
+          onClick={closeImport}
+          onDragOver={onOverlayDragOver}
+          onDrop={onOverlayDrop}
+          role="presentation"
+        >
+          <div
+            className="import-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Импорт трека"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="import-head">
+              <h3>Импорт трека</h3>
+              <button className="import-close" type="button" onClick={closeImport} aria-label="Закрыть">
+                ✕
+              </button>
+            </header>
+
+            <div className={`drop-zone state-${importState}`} aria-label="Зона перетаскивания файла или текста">
+              <p>
+                <span className="drop-hint-strong">Перетащи сюда</span> .json или текст
+              </p>
+              <button className="import-file-btn" type="button" onClick={() => fileInputRef.current?.click()}>
+                Выбрать файл
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={onFileChosen}
+                hidden
+              />
+            </div>
+
+            <p className="import-or">или вставь JSON</p>
+            <textarea
+              className="import-textarea"
+              value={importText}
+              onChange={(event) => setImportText(event.target.value)}
+              placeholder='{ "version": 1, "bpm": 75, "bars": 8, "tracks": [ ... ] }'
+              spellCheck={false}
+            />
+
+            {importError && <p className="import-error">{importError}</p>}
+
+            <div className="import-actions">
+              <button className="import-cancel" type="button" onClick={closeImport}>
+                Отмена
+              </button>
+              <button className="import-submit" type="button" onClick={() => runImport(importText)}>
+                Импортировать
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <div className="toast">{toast}</div>}
     </main>
@@ -681,7 +935,7 @@ function TrackRow({
   );
 }
 
-function Inspector({ song, validation, lastPrompt, lastError }) {
+function Inspector({ song, validation, lastPrompt, lastError, rendering, onImport, onExportJson, onExportWav }) {
   return (
     <aside className="inspector" aria-label="Song inspector">
       <section className="inspector-section">
@@ -736,9 +990,23 @@ function Inspector({ song, validation, lastPrompt, lastError }) {
       </section>
 
       <section className="inspector-section">
-        <button className="export-button" type="button" disabled>
-          Export WAV
-        </button>
+        <p className="eyebrow">Импорт / экспорт</p>
+        <div className="export-actions">
+          <button className="export-button" type="button" onClick={onImport}>
+            Импорт трека
+          </button>
+          <button className="export-button" type="button" onClick={onExportJson} disabled={!song}>
+            Экспорт JSON
+          </button>
+          <button
+            className={`export-button ${rendering ? "is-rendering" : ""}`}
+            type="button"
+            onClick={onExportWav}
+            disabled={!song || rendering}
+          >
+            {rendering ? "Рендер…" : "Сохранить WAV"}
+          </button>
+        </div>
         {lastError && <p className="last-error">{lastError}</p>}
       </section>
     </aside>

@@ -18,8 +18,8 @@
 | Player (Tone.js) | C | ✅ engine + sampler готовы | `createPlayer()` | `frontend/src/player/` |
 | Чат-UI + состояние | A | ✅ stage 3 demo-ready | — | `frontend/` |
 | Грид дорожек + ручные контролы | A | ✅ stage 3 demo-ready | Song JSON → `player.load(song)` | `frontend/src/App.jsx`, `frontend/src/songEditing.js` |
-| Импорт/экспорт проекта | A | 🟡 запланирован (анонс) | `song-io.js` (serialize/parse/validate) | `frontend/src/song-io.js` |
-| Экспорт WAV (растяжка) | C | 🟡 запланирован (анонс) | `player.exportWav(song?)` | `frontend/src/player/` |
+| Импорт/экспорт проекта | A | ✅ готов | `song-io.js` (serialize/parse/validate) + UI overlay | `frontend/src/song-io.js`, `App.jsx` |
+| Экспорт WAV (растяжка) | C | ✅ готов | `player.exportWav(song?)` | `frontend/src/player/` |
 
 Легенда: ⬜ не начат · 🟡 в работе · ✅ готов · ⚠️ есть отклонение/баг (см. запись).
 
@@ -62,6 +62,42 @@
 - **Отклонения от контракта:** нет.
 - **Проверено:** `cd frontend && npm test` (6/6), `cd frontend && npm run build`.
 - **Известные баги / TODO:** добавленная synth-дорожка пока пустая и редактируется только через будущие note controls/LLM.
+
+### 2026-07-11 · Импорт/экспорт проекта + сохранение аудио — реализовано · A/C
+- **Что сделано:** выполнен анонсированный ниже пасс. Song JSON / `/api/compose` / Player-интерфейс — без несовместимых
+  изменений; `song.schema.json` не менялся, `version` = 1.
+  - **song-io (A, чистый ESM):** `serializeSong`, `parseSong`, `validateSong`, `normalizeImportedSong`, `songFilename`,
+    `downloadBlob`, `readFileAsText`. Валидация зеркалит `song.schema.json` (без зависимостей), нормализация повторяет
+    бэковый `normalizeSong`: дроп событий вне лупа с warning, кламп `dur`/`bpm`/`bars`/`gain`, дедуп `id`; идемпотентна.
+    Событие вне лупа **не отклоняет** импорт — мягко дропается (как в бэке/плеере).
+  - **Экспорт JSON (A):** файл = чистый Song JSON v1, реимпортируемый.
+  - **Импорт 3 способами → один конвейер** `text → parseSong → player.load`: вставка в textarea, выбор файла,
+    drag-n-drop файла **или** текста. Полноэкранный overlay сам открывается при перетаскивании файла над окном
+    (счётчик dragenter/dragleave закрывает его, если файл увели). Ошибка ввода не роняет UI и не меняет состояние.
+  - **WAV (C):** `player.exportWav(song?)` — офлайн-рендер (`Tone.Offline`, транспорт офлайн-контекста `ctx.transport`)
+    одного лупа → PCM16 WAV (`audioBufferToWav`, без энкодера). Длина = `bars*4*60/bpm` c. Живой Transport не трогается.
+  - **UX по дизайн-системе:** motion fast/base/pulse/beatFlash; cyan=drop/ввод, lime=успех-флеш, coral=ошибка+shake,
+    pulse на рендере; `prefers-reduced-motion` отключает анимации.
+- **Где:** новые `frontend/src/song-io.js` (+`song-io.test.mjs`), `frontend/src/player/wav.js` (+`wav.test.mjs`);
+  правки `frontend/src/player/index.js` (+`exportWav`, `lastSong`), `frontend/src/App.jsx`, `frontend/src/styles.css`,
+  `frontend/package.json` (+`"test": "node --test"`), `frontend/src/player/MANUAL_SMOKE_CHECK.md`.
+- **Публичный интерфейс:** `Player.exportWav(song?) → Promise<Blob("audio/wav")>` (реализация опционального метода
+  Контракта 3); фронтовый модуль `song-io` (Контракт 4). Кросс-командных изменений данных нет.
+- **Как использовать:** `cd frontend && npm test` (30 тестов после мерджа со stage 3) и `npm run build`. В UI: кнопки
+  «Импорт трека / Экспорт JSON / Сохранить WAV» в inspector-панели (секция «Импорт / экспорт»); импорт — вставкой в
+  textarea, выбором файла или drag-n-drop на любое место окна.
+- **Интеграция со stage 3:** влито поверх stage 3 UI (rebase). Экспорт/импорт вынесены в inspector (заменили бывшую
+  disabled-кнопку «Export WAV»); overlay импорта — full-screen. Кнопки используют классы `.export-button`/`.import-*`.
+- **Отклонения от контракта:** нет. Уточнён `validateSong`: `events` трактуется как опциональное (схема требует ключ,
+  но бэк/плеер/нормализация переносят пустое) — единственное место, где лёгкий валидатор мягче схемы.
+- **Проверено:** `npm test` 30/30 зелёные; `npm run build` ок; браузерный smoke (Chrome, browser-check):
+  страница монтируется без ошибок консоли; импорт через textarea меняет трек и закрывает overlay; битый JSON →
+  coral+shake, overlay остаётся, состояние не портится; **реальный `exportWav` → корректный стерео WAV 352844 B**
+  (`44 + 44100·2·2·2` для 2 c) и кнопка даёт тост «WAV сохранён».
+- **Известные баги / TODO:** release-хвосты синтов на границе лупа обрезаются (рендерим ровно один луп); импорт/экспорт —
+  целый проект, не отдельные дорожки; только WAV. Файловый и drag-путь используют тот же конвейер, что проверенный
+  textarea; их визуал проверяется вручную (см. MANUAL_SMOKE_CHECK) — синтетический DragEvent из devtools не триггерит
+  React-делегирование.
 
 ### 2026-07-11 · Этап 3 фронта: studio UI и ручные контролы · A / UX-Front
 - **Что сделано:** реализован stage 3 UI по дизайн-системе: трёхзонный shell chat/studio/inspector, live visualizer,
