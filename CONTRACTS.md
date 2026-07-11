@@ -149,16 +149,31 @@ Response ошибки (`4xx`/`5xx`):
 { "error": { "code": "llm_invalid_output", "message": "human-readable" } }
 ```
 Коды: `bad_request` (400), `llm_invalid_output` (422), `llm_error` (502), `internal` (500).
+`rate_limited` (429) — опционально, off по умолчанию (см. hardening-пасс B ниже).
 
 **Гарантии бэка (B):**
 - В ответе `song` всегда полный и валиден по схеме (внутри — валидация + до 2 ретраев к LLM).
 - CORS открыт для дев-фронта. `Content-Type: application/json`.
 - `message` — 1–2 предложения, тот же язык, что и prompt.
 
+> **⚠️ Аддитивный hardening-пасс B (в работе; детали — в IMPLEMENTATION_LOG).** Форма запроса/ответа `/api/compose`
+> и Song JSON **не меняются**. Добавляется/уточняется только следующее (обратно совместимо, всё за env-флагами):
+> - **Лимиты входа:** `prompt` ≤ `MAX_PROMPT_CHARS` (деф. 2000), входной `song` ≤ `MAX_SONG_CHARS` (деф. 20000) → `400 bad_request`.
+> - **Санитизация ошибок:** для `llm_error`/`llm_invalid_output`/`internal` клиенту уходит generic-текст без тела провайдера
+>   (полный текст — в логах сервера). `bad_request` остаётся информативным. Форма конверта ошибки та же.
+> - **Прозрачно для клиента:** таймаут LLM (`LLM_TIMEOUT_MS`, деф. 30000) и ретрай транзиентных ошибок провайдера (429/5xx/сеть) с backoff.
+> - **Опциональный rate-limit** (`RATE_LIMIT_ENABLED`, деф. off) → код `rate_limited` (429) в том же конверте ошибки.
+
 ### `GET /api/catalog` (вспомогательный)
 Отдаёт актуальный каталог, чтобы фронт не хардкодил списки:
 ```jsonc
 { "synths": ["sine_bass", "..."], "kits": ["lofi_kit", "..."], "roles": ["drums","bass","chords","lead","pad","fx"] }
+```
+
+### `GET /api/health` (вспомогательный, добавляется B — аддитивно)
+Лёгкий health-check для фронта/ops. Секретов не отдаёт (`proxy` — только булев флаг):
+```jsonc
+{ "ok": true, "provider": "anthropic", "model": "claude-haiku-4-5", "proxy": true, "uptime": 123.4 }
 ```
 
 ---
