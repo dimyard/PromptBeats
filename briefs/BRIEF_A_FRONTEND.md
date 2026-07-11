@@ -37,15 +37,23 @@ Song JSON / HTTP / Player-интерфейс не меняй без правки
    Слушать событие `error` плеера (payload `{code,message,details?}`) и мягко сообщать (напр. «звук X недоступен»).
 3. **Визуализация трека.** Сделать грид дорожек читаемым: имя/`role` дорожки, шаги (16 на такт), подсветка активных
    шагов и бегущий плейхед (событие `step` → number). Показывать `title`, `bpm`, `key`.
-4. **Fallback «Пример».** Кнопка, которая грузит `sample-song.json` напрямую в плеер — страховка на демо, если LLM
+4. **Ручные контролы дорожек.** Для демо и будущего продукта нужен минимальный control surface поверх Song JSON:
+   - mute/unmute дорожки → меняй `track.muted`, затем `player.load(updatedSong)`;
+   - level/gain → меняй `track.gain` в диапазоне `0..1`, затем `player.load(updatedSong)`;
+   - выбор sound/kit → меняй `track.sound` только на допустимый звук из каталога для текущего `instrument`;
+   - step-grid/drum pads → добавляй, удаляй или переключай события в `track.events`;
+   - для sampler-дорожек используй Drum note map из `CONTRACTS.md`: `C2=kick`, `D2=snare`, `F#2=closed hat`, ...
+   Не добавляй live-control методы в Player: ручная настройка в MVP = правка `currentSong` и повторный `load`.
+5. **Fallback «Пример».** Кнопка, которая грузит `sample-song.json` напрямую в плеер — страховка на демо, если LLM
    затупит. (Импортируй фикстуру или положи её в `public/`.)
-5. **Каталог.** По желанию подтянуть `GET /api/catalog` и показать доступные звуки/роли (чтобы не хардкодить списки).
-6. **Полировка.** Приятная тёмная тема, адаптив, понятный первый экран с подсказкой-плейсхолдером.
+6. **Каталог.** По желанию подтянуть `GET /api/catalog` и показать доступные звуки/роли (чтобы не хардкодить списки).
+7. **Полировка.** Приятная тёмная тема, адаптив, понятный первый экран с подсказкой-плейсхолдером.
 
 ## Definition of Done
 - Ввод пожелания → появляется трек и играет по кнопке Play (первый play — по клику, это требование WebAudio).
 - Правка текстом → плеер перезагружается новым Song, история видна.
 - Ошибки бэка и плеера не роняют приложение, показываются пользователю.
+- Ручные контролы `mute`, `gain` и базовый step-grid меняют `currentSong` и слышны после перезагрузки плеера.
 - Есть кнопка «Пример» (fallback). Запись в `IMPLEMENTATION_LOG.md` добавлена.
 
 ## Контракт вызовов (шпаргалка)
@@ -60,6 +68,16 @@ player.on("step", (s) => setPlayhead(s));                    // s: number
 const { song, message } = await compose(prompt, currentSong); // currentSong=null => генерация
 await player.load(song);
 await player.play(); // по клику
+
+// Ручная настройка дорожки:
+const updatedSong = {
+  ...currentSong,
+  tracks: currentSong.tracks.map((t) =>
+    t.id === "drums" ? { ...t, muted: !t.muted, gain: 0.7 } : t
+  ),
+};
+setCurrentSong(updatedSong);
+await player.load(updatedSong);
 // при размонтировании: offErr(); player.dispose();
 ```
 

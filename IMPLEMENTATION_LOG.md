@@ -39,6 +39,16 @@
 
 ## Записи
 
+### 2026-07-11 · Sampler engine и ручные контролы · C/A contract docs
+- **Что сделано:** явно добавлен sampler/kit слой в контракт и brief C; для A описаны ручные контролы дорожек.
+- **Где:** `CONTRACTS.md`, `briefs/BRIEF_C_PLAYER.md`, `briefs/BRIEF_A_FRONTEND.md`.
+- **Публичный интерфейс:** без новых методов Player. Ручная настройка MVP идёт через правку Song JSON
+  (`track.muted`, `track.gain`, `track.sound`, `track.events`) и повторный `player.load(updatedSong)`.
+- **Как использовать:** A меняет `currentSong` контролами UI и вызывает `player.load(updatedSong)`; C гарантирует
+  sampler/kit playback для `instrument: "sampler"` по Drum note map и применяет `gain/muted/sound/events` при `load`.
+- **Отклонения от контракта:** нет; `song.schema.json` не менялся, потому что новые требования используют уже существующие поля.
+- **Известные баги / TODO:** реализовать более различимые киты и, при наличии чистых лицензий, реальные samples через `Tone.Sampler`.
+
 ### 2026-07-11 · Синхронизация UX-доков с Song JSON events · A / UX-Front
 - **Что сделано:** Claude Design prompt и UX-ресерч приведены к актуальному контракту: все дорожки рисуются из
   `tracks[].events`, старые поля `pattern`/`notes` явно запрещены, `role` указан как обязательный.
