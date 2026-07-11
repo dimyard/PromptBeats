@@ -13,8 +13,8 @@
 |-----------|----------|--------|---------------------|-----|
 | Song JSON + схема | все | ✅ готов (v1) | `song.schema.json` | корень |
 | Фикстура-мок | все | ✅ готов | `sample-song.json` | корень |
-| Бэк `/api/compose` | B | 🟡 каркас готов | `POST /api/compose`, `GET /api/catalog` | `backend/` |
-| LLM-промт + валидатор | B | 🟡 валидатор+ретрай готовы, LLM — заглушка | `backend/src/llm.js` | `backend/` |
+| Бэк `/api/compose` | B | ✅ готов | `POST /api/compose`, `GET /api/catalog` | `backend/` |
+| LLM-промт + валидатор | B | ✅ готов (multi-provider + few-shot + proxy) | `backend/src/llm.js`, `backend/src/providers.js` | `backend/` |
 | Player (Tone.js) | C | ✅ engine + sampler готовы | `createPlayer()` | `frontend/src/player/` |
 | Чат-UI + состояние | A | 🟡 рабочий базовый | — | `frontend/` |
 | Грид дорожек | A | 🟡 базовый | — | `frontend/src/App.jsx` |
@@ -39,6 +39,48 @@
 
 ## Записи
 
+### 2026-07-11 · Прокси для запросов к LLM · B
+- **Что сделано:** добавил опциональную маршрутизацию запросов к провайдерам через прокси. Включается env-переменной
+  `LLM_PROXY` (или стандартными `HTTPS_PROXY`/`HTTP_PROXY`), поддержаны http/https-прокси и креды `user:pass@`.
+  Прокси-URL резолвится лениво один раз, `ProxyAgent` переиспользуется (пул соединений), креды маскируются в логе.
+  **Важно (проверено эмпирически на Node 25.2.1):** глобальный `fetch` игнорирует прокси-env; нативный
+  `--use-env-proxy` HTTPS-трафик здесь НЕ проксировал; `ProxyAgent` из пакета + глобальный `fetch` падает
+  (`invalid onRequestStart`, скос внутренних версий). Рабочая связка — **`fetch` и `ProxyAgent` из одного пакета
+  `undici`**. Поэтому адаптеры переведены на `undici.fetch`.
+- **Где:** `backend/src/providers.js` (импорт `undici`, `getDispatcher()`+`llmFetch()`, три адаптера зовут `llmFetch`),
+  `backend/.env.example` и `backend/.env` (доки `LLM_PROXY`), `backend/package.json` (+ dep `undici ^8`).
+- **Публичный интерфейс:** не изменился (`/api/compose`, `generateSong`). Новое — env `LLM_PROXY`.
+- **Как использовать:** в `backend/.env` задать `LLM_PROXY=http://host:port` (или экспортировать `HTTPS_PROXY`);
+  без переменной поведение прежнее (прямые запросы). При активном прокси в лог пишется `[llm] routing ... via proxy ...`.
+- **Отклонения от контракта:** нет.
+- **Проверено:** прокси на мёртвый порт → `ECONNREFUSED` именно на адрес прокси (значит трафик идёт в прокси);
+  без прокси → запрос уходит на хост провайдера; `mock`-пайплайн (generate+edit) остаётся зелёным; `node --check` ок.
+- **Боевой прогон:** ✅ реальный Anthropic (`claude-haiku-4-5`) через прокси заказчика — generate + edit вернули
+  валидный по схеме Song с осмысленным `message` на языке промта (~5.8s на оба вызова).
+- **Известные баги / TODO:** правит запись ниже — утверждение «новых npm-зависимостей нет» больше неактуально
+  (добавлен `undici`). SOCKS-прокси не поддержан (`ProxyAgent` умеет только http/https).
+
+### 2026-07-11 · LLM-шлюз: реальный вызов вместо STUB · B
+- **Что сделано:** заменил заглушку в `llm.js` реальным LLM-вызовом. Сделал слой **провайдер-агностичным** —
+  провайдер и модель выбираются через `.env`, без правок кода. Поддержаны **anthropic / openai / gemini** и
+  `mock` (offline, без ключа — для смоука и демо). Собран system-промт (строго по схеме + каталог + drum-map +
+  жёсткие инварианты, «только JSON-обёртка `{message, song}` без markdown»), 3 few-shot (2 генерация + 1 правка),
+  устойчивый парсер (срезает ```-ограждения и текст вокруг, принимает обёртку и «голый» Song). На ретрае
+  `previousErrors` вкладываются в user-сообщение.
+- **Где:** `backend/src/llm.js` (промт+few-shot+парсинг+`generateSong`), `backend/src/providers.js` (адаптеры+выбор
+  провайдера), `backend/.env.example` (LLM_PROVIDER/LLM_MODEL/ключи). `compose.js`/`validate.js`/`server.js` не менял.
+- **Публичный интерфейс:** контракт не изменён. `generateSong({prompt, song, previousErrors}) → {song, message}`;
+  `POST /api/compose`, `GET /api/catalog` — как в CONTRACTS.md.
+- **Как использовать:** `cd backend && npm i && cp .env.example .env` → задать `LLM_PROVIDER` + соответствующий ключ
+  (`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`GEMINI_API_KEY`), опц. `LLM_MODEL`; `npm run dev`. Дефолт — `anthropic`
+  (`claude-haiku-4-5`). Без ключа: `LLM_PROVIDER=mock`. Проверка — curl из брифа.
+- **Отклонения от контракта:** нет. Форму Song JSON / HTTP API / схему не трогал.
+- **Проверено:** offline-скрипт — все 3 few-shot валидны по схеме; `extractJson`/`parseResponse` (обёртка/фенсы/
+  голый Song/ошибка) ок; `compose` generate+edit на mock → валидный Song, bpm парсится, `message` непустой.
+  HTTP-смоук (`PORT=3011`, mock): `/api/catalog` ок, generate ок, пустой body → `400 bad_request`.
+- **Известные баги / TODO:** `max_tokens=4096` — для очень плотных 32-тактовых треков может быть мало. Anthropic без
+  нативного JSON-mode — держимся на строгом промте + ретрае (OpenAI/Gemini включают json-mime).
+
 ### 2026-07-11 · Player + sampler engine · C
 - **Что сделано:** плеер теперь выбирает synth/kit по `track.instrument`, защищённо обрабатывает неизвестные sound,
   применяет `gain`, `muted`, `sound` и `events` при каждом идемпотентном `load(song)`; события вне лупа репортятся,
@@ -56,6 +98,7 @@
 - **Известные баги / TODO:** `exportWav()` пока не реализован (опциональный метод контракта); в текущей среде
   production-сборка Vite не получила ответ от проверки разрешений, поэтому остаётся прогнать `npm run build`
   и браузерный smoke-check на машине разработчика.
+
 ### 2026-07-11 · Этап 1 фронта: ревизия A · A / UX-Front
 - **Что сделано:** выполнена ревизия текущего `frontend/` перед кодингом: проверены `App.jsx`, `api.js`, README,
   `sample-song.json`, контракт Player и brief A; зафиксированы соответствия, пробелы и очередь этапа 2.
