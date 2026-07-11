@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/dimyard/PromptBeats/song.schema.json",
+  "title": "PromptBeats Song",
+  "description": "Единый контракт данных. Время в шагах: 16 шагов = 1 такт. Всего шагов = bars*16.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "bpm", "bars", "tracks"],
+  "properties": {
+    "version": { "const": 1 },
+    "title": { "type": "string", "maxLength": 120 },
+    "bpm": { "type": "number", "minimum": 40, "maximum": 220 },
+    "key": { "type": "string", "maxLength": 40 },
+    "bars": { "type": "integer", "minimum": 1, "maximum": 32 },
+    "tracks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/definitions/track" }
+    }
+  },
+  "definitions": {
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "instrument", "sound", "events"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,40}$" },
+        "role": { "enum": ["drums", "bass", "chords", "lead", "pad", "fx"] },
+        "instrument": { "enum": ["synth", "sampler"] },
+        "sound": {
+          "enum": [
+            "sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell",
+            "lofi_kit", "house_kit", "trap_kit"
+          ]
+        },
+        "gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "muted": { "type": "boolean" },
+        "events": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/definitions/event" }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "note"],
+      "properties": {
+        "step": { "type": "integer", "minimum": 0, "maximum": 511 },
+        "note": { "type": "string", "pattern": "^[A-Ga-g](#|b)?-?[0-9]$" },
+        "dur": { "type": "integer", "minimum": 1, "maximum": 512 },
+        "vel": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}
