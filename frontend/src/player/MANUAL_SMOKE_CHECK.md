@@ -66,22 +66,32 @@ console.assert(errors.some(({ code, details }) => (
 ```
 
 Run the following one line at a time. The edit simulates A's manual controls:
-it changes BPM, mutes drums, lowers bass gain, and reloads the complete Song.
-Playback should remain active after the reload. `stop()` should reset the
-position, emit step `0`, and silence any active tail immediately.
+it changes BPM, mutes drums, lowers bass gain, adds a future bass note, and
+reloads the complete Song. With unchanged `bars`, playback and the current
+Transport position must survive the reload. The new note should play in the
+current loop if its step is still ahead, otherwise on the next loop.
+`stop()` should reset the position, emit step `0`, and silence any active tail
+immediately.
 
 ```js
 await player.play();
+const currentStep = steps.at(-1) ?? 0;
+const futureStep = (currentStep + 4) % 16;
 await player.load({
   ...song,
   bpm: 90,
   tracks: song.tracks.map((track) => (
     track.id === "drums"
       ? { ...track, muted: true }
-      : { ...track, gain: 0.35 }
+      : {
+        ...track,
+        gain: 0.35,
+        events: [...track.events, { step: futureStep, note: "C2", dur: 1, vel: 0.8 }],
+      }
   )),
 });
 console.assert(player.isPlaying());
+console.log("new bass note scheduled for step", futureStep);
 player.isPlaying();
 player.stop();
 player.isPlaying();
@@ -96,6 +106,8 @@ Expected results:
 - A synth track with a kit sound reports the contract-safe `unknown_sound` code with mismatch details.
 - `isPlaying()` is `true` after `play()` and `false` after `stop()`.
 - BPM, mute, and gain from the reloaded Song JSON take effect without adding Player methods.
+- With unchanged Bars, a running `load()` does not restart the playhead; a future edited step plays this loop,
+  while a passed step waits for the next loop.
 - `steps.at(-1)` is `0` after `stop()`.
 
 ## WAV export (offline render)

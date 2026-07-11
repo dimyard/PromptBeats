@@ -74,12 +74,19 @@ export function createPlayer() {
   async function load(song) {
     try {
       const wasPlaying = playing;
+      const nextTotalSteps = safeSteps(song?.bars);
+      const preservePosition = wasPlaying
+        && Tone.Transport.state === "started"
+        && nextTotalSteps === totalSteps;
       lastSong = song;
-      Tone.Transport.stop();
+      if (!preservePosition) {
+        Tone.Transport.stop();
+        Tone.Transport.position = 0;
+      }
       teardown();
 
       Tone.Transport.bpm.value = numberInRange(song?.bpm, DEFAULT_BPM, 40, MAX_BPM);
-      totalSteps = safeSteps(song?.bars);
+      totalSteps = nextTotalSteps;
       Tone.Transport.loop = true;
       Tone.Transport.loopStart = 0;
       Tone.Transport.loopEnd = `${totalSteps / 16}:0:0`;
@@ -167,7 +174,7 @@ export function createPlayer() {
       }, "16n");
 
       emit("ready", { totalSteps });
-      if (wasPlaying) await play();
+      if (wasPlaying && !preservePosition) await play();
     } catch (err) {
       emit("error", { code: "load_failed", message: err.message });
       throw err;
