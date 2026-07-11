@@ -10,7 +10,7 @@ export const DRUM_NOTE_MAP = Object.freeze({
   "F#2": "closedhat",
   "A#2": "openhat",
   E2: "tom",
-  "C#3": "crash",
+  "C#3": "ride",
 });
 
 export const SYNTH_SOUNDS = Object.freeze([
@@ -85,17 +85,17 @@ const KIT_PROFILES = {
   lofi_kit: {
     kickNote: "C1", kickOctaves: 4.5, kickDecay: 0.075, kickDuration: "8n",
     snareNoise: "pink", snareDecay: 0.2, hatNoise: "pink", hatDecay: 0.045,
-    openHatDecay: 0.22, crashDecay: 0.65, tomNote: "G1", clapDelay: 0.026,
+    openHatDecay: 0.22, rideDecay: 0.65, tomNote: "G1", clapDelay: 0.026,
   },
   house_kit: {
     kickNote: "C1", kickOctaves: 7, kickDecay: 0.035, kickDuration: "4n",
     snareNoise: "white", snareDecay: 0.13, hatNoise: "white", hatDecay: 0.028,
-    openHatDecay: 0.3, crashDecay: 0.95, tomNote: "A1", clapDelay: 0.018,
+    openHatDecay: 0.3, rideDecay: 0.95, tomNote: "A1", clapDelay: 0.018,
   },
   trap_kit: {
     kickNote: "C0", kickOctaves: 8, kickDecay: 0.055, kickDuration: "8n",
     snareNoise: "white", snareDecay: 0.09, hatNoise: "white", hatDecay: 0.018,
-    openHatDecay: 0.16, crashDecay: 0.5, tomNote: "E1", clapDelay: 0.014,
+    openHatDecay: 0.16, rideDecay: 0.5, tomNote: "E1", clapDelay: 0.014,
   },
 };
 
@@ -142,13 +142,13 @@ export function makeKit(sound, output = Tone.getDestination()) {
     octaves: 3.5,
     envelope: { attack: 0.001, decay: 0.19, sustain: 0.01, release: 0.04 },
   });
-  const crash = new Tone.NoiseSynth({
+  const ride = new Tone.NoiseSynth({
     noise: { type: "white" },
-    envelope: { attack: 0.002, decay: profile.crashDecay, sustain: 0 },
+    envelope: { attack: 0.002, decay: profile.rideDecay, sustain: 0 },
   });
 
   const nodes = connectAll(
-    [kick, snareNoise, snareBody, clap, closedHat, openHat, tom, crash],
+    [kick, snareNoise, snareBody, clap, closedHat, openHat, tom, ride],
     output,
   );
 
@@ -177,8 +177,8 @@ export function makeKit(sound, output = Tone.getDestination()) {
         case "tom":
           tom.triggerAttackRelease(profile.tomNote, "8n", at, vel * 0.78);
           break;
-        case "crash":
-          crash.triggerAttackRelease("8n", at, vel * 0.42);
+        case "ride":
+          ride.triggerAttackRelease("8n", at, vel * 0.42);
           break;
         case "kick":
         default:
