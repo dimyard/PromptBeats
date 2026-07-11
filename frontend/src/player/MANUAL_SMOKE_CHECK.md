@@ -55,6 +55,14 @@ await player.load({
 });
 console.assert(errors.some(({ code }) => code === "unknown_sound"));
 console.assert(errors.some(({ code }) => code === "event_out_of_range"));
+
+await player.load({
+  ...song,
+  tracks: [{ ...song.tracks[1], sound: "lofi_kit" }],
+});
+console.assert(errors.some(({ code, details }) => (
+  code === "unknown_sound" && details?.reason === "instrument_sound_mismatch"
+)));
 ```
 
 Run the following one line at a time. The edit simulates A's manual controls:
@@ -85,6 +93,7 @@ Expected results:
 
 - Both assertions pass without a thrown error.
 - The player reports `unknown_sound` and `event_out_of_range`, but remains usable.
+- A synth track with a kit sound reports the contract-safe `unknown_sound` code with mismatch details.
 - `isPlaying()` is `true` after `play()` and `false` after `stop()`.
 - BPM, mute, and gain from the reloaded Song JSON take effect without adding Player methods.
 - `steps.at(-1)` is `0` after `stop()`.

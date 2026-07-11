@@ -18,6 +18,8 @@ const DEFAULT_GAIN = 0.8;
 const STOP_FADE_SECONDS = 0.005;
 const MAX_BPM = 220;
 const MAX_BARS = 32;
+const MASTER_GAIN = 0.8;
+const LIMITER_THRESHOLD_DB = -1;
 
 const numberInRange = (value, fallback, min, max) => {
   const number = Number(value);
@@ -30,6 +32,7 @@ export function createPlayer() {
   let parts = [];
   let voices = [];
   let trackOutputs = [];
+  let masterNodes = [];
   let stepEventId = null;
   let totalSteps = 16;
   let playing = false;
@@ -44,6 +47,16 @@ export function createPlayer() {
     parts = [];
     voices = [];
     trackOutputs = [];
+    masterNodes.forEach((node) => node.dispose?.());
+    masterNodes = [];
+  }
+
+  function createMasterBus() {
+    const masterGain = new Tone.Gain(MASTER_GAIN);
+    const limiter = new Tone.Limiter(LIMITER_THRESHOLD_DB).toDestination();
+    masterGain.connect(limiter);
+    masterNodes = [masterGain, limiter];
+    return masterGain;
   }
 
   function setOutputGain(output, value, rampSeconds = 0) {
@@ -67,10 +80,12 @@ export function createPlayer() {
       Tone.Transport.loop = true;
       Tone.Transport.loopStart = 0;
       Tone.Transport.loopEnd = `${totalSteps / 16}:0:0`;
+      const masterBus = createMasterBus();
 
       for (const track of song?.tracks ?? []) {
         const outputLevel = track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1);
-        const gain = new Tone.Gain(outputLevel).toDestination();
+        const gain = new Tone.Gain(outputLevel);
+        gain.connect(masterBus);
         voices.push(gain);
         trackOutputs.push({ gain, outputLevel });
 
@@ -89,9 +104,14 @@ export function createPlayer() {
         } else {
           if (isKit(track.sound)) {
             emit("error", {
-              code: "instrument_sound_mismatch",
+              code: "unknown_sound",
               message: `synth track cannot use kit \"${track.sound}\", using pluck`,
-              details: { track: track.id, instrument: track.instrument, sound: track.sound },
+              details: {
+                track: track.id,
+                instrument: track.instrument,
+                sound: track.sound,
+                reason: "instrument_sound_mismatch",
+              },
             });
           }
           voice = makeSynth(isKit(track.sound) ? "pluck" : track.sound);
