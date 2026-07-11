@@ -23,7 +23,17 @@
     "track": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "instrument", "sound", "events"],
+      "required": ["id", "role", "instrument", "sound", "events"],
+      "allOf": [
+        {
+          "if": { "properties": { "instrument": { "const": "synth" } } },
+          "then": { "properties": { "sound": { "enum": ["sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell"] } } }
+        },
+        {
+          "if": { "properties": { "instrument": { "const": "sampler" } } },
+          "then": { "properties": { "sound": { "enum": ["lofi_kit", "house_kit", "trap_kit"] } } }
+        }
+      ],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,40}$" },
         "role": { "enum": ["drums", "bass", "chords", "lead", "pad", "fx"] },

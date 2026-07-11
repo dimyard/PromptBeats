@@ -39,6 +39,21 @@
 
 ## Записи
 
+### 2026-07-11 · Уточнение контрактов (6 правок по ревью) · setup
+- **Что сделано:** закрыты 6 замечаний по контрактам до старта B.
+  1. `role` теперь обязателен (schema `required` + CONTRACTS).
+  2. Инвариант `step < bars*16` — уже был в `validate.js`; C теперь пропускает/репортит события вне лупа.
+  3. `step + dur <= bars*16` — бэк нормализует (`normalizeSong` клампит `dur`), C клампит защитно.
+  4. Пары instrument↔sound — жёсткий инвариант в схеме через `if/then` (synth→синты, sampler→киты).
+  5. Payload'ы событий плеера зафиксированы: `step→number`, `ready→{totalSteps}`, `error→{code,message,details?}`.
+  6. `on(...)` возвращает unsubscribe-функцию (React-safe).
+- **Где:** `song.schema.json`, `CONTRACTS.md`, `backend/src/validate.js` (+`compose.js`), `frontend/src/player/index.js`, `frontend/src/App.jsx`.
+- **Как использовать:** без изменений в вызовах; `on()` теперь можно (нужно) отписывать: `const off = player.on(...); off()`.
+- **Отклонения от контракта:** нет — контракт и код синхронны.
+- **Проверено:** sample валиден; missing role / synth+kit / sampler+synth-sound — отклоняются; `dur 20→2` клампится;
+  compose generate/edit зелёные; player/App парсятся (esbuild). Пофикшена TDZ-коллизия `song` в compose.js.
+- **Известные баги / TODO:** без изменений (B: реальный LLM; C: сэмпл-киты/exportWav; A: полировка UI).
+
 ### 2026-07-11 · Скелет проекта (backend + frontend + player) · setup
 - **Что сделано:** рабочий end-to-end каркас по контрактам. Запускается на заглушке LLM.
 - **Где:** `backend/` (server/compose/validate/llm/catalog), `frontend/` (Vite+React, `src/App.jsx`, `src/api.js`),

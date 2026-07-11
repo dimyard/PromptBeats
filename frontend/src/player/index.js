@@ -55,20 +55,37 @@ export function createPlayer() {
         } else {
           voice = makeSynth(track.sound);
           if (!voice) {
-            emit("error", { track: track.id, reason: `unknown sound "${track.sound}", using pluck` });
+            emit("error", {
+              code: "unknown_sound",
+              message: `unknown sound "${track.sound}", using pluck`,
+              details: { track: track.id, sound: track.sound },
+            });
             voice = makeSynth("pluck");
           }
           voice.connect(gain);
         }
         voices.push(voice);
 
-        const evts = (track.events ?? []).map((e) => [stepToTime(e.step), e]);
+        // Skip/report events outside the loop; defensively clamp dur to the loop end.
+        const evts = [];
+        for (const e of track.events ?? []) {
+          if (typeof e.step !== "number" || e.step < 0 || e.step >= totalSteps) {
+            emit("error", {
+              code: "event_out_of_range",
+              message: `event step ${e.step} outside loop (0..${totalSteps - 1})`,
+              details: { track: track.id, step: e.step },
+            });
+            continue;
+          }
+          const dur = Math.max(1, Math.min(e.dur ?? 1, totalSteps - e.step));
+          evts.push([stepToTime(e.step), { ...e, dur }]);
+        }
         const part = new Tone.Part((time, e) => {
           const vel = e.vel ?? 0.8;
           if (kit) {
             voice.trigger(e.note, time, vel);
           } else {
-            const durSec = Tone.Time(`0:0:${e.dur ?? 1}`).toSeconds();
+            const durSec = Tone.Time(`0:0:${e.dur}`).toSeconds();
             voice.triggerAttackRelease(e.note, durSec, time, vel);
           }
         }, evts);
@@ -88,7 +105,7 @@ export function createPlayer() {
       emit("ready", { totalSteps });
       if (wasPlaying) await play();
     } catch (err) {
-      emit("error", { reason: err.message });
+      emit("error", { code: "load_failed", message: err.message });
       throw err;
     }
   }
@@ -111,7 +128,15 @@ export function createPlayer() {
     play,
     stop,
     isPlaying: () => playing,
-    on: (event, cb) => { (listeners[event] ||= []).push(cb); },
+    /** Subscribe to "step" | "ready" | "error". Returns an unsubscribe fn. */
+    on: (event, cb) => {
+      const arr = (listeners[event] ||= []);
+      arr.push(cb);
+      return () => {
+        const i = arr.indexOf(cb);
+        if (i >= 0) arr.splice(i, 1);
+      };
+    },
     dispose: () => { teardown(); },
     // exportWav(song) {}  // stretch goal — Tone.Offline render
   };

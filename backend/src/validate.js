@@ -12,6 +12,27 @@ const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
 const ajv = new Ajv({ allErrors: true });
 const validateSchema = ajv.compile(schema);
 
+/**
+ * Normalizes a Song in place-safe way (returns a fixed clone) before validation.
+ * Currently: clamps each event's `dur` so `step + dur <= bars*16` (notes never
+ * overhang the loop). Add further gentle fixes here rather than rejecting.
+ * @returns {object} normalized song
+ */
+export function normalizeSong(song) {
+  if (!song || typeof song !== "object") return song;
+  const out = structuredClone(song);
+  const totalSteps = (out.bars ?? 0) * 16;
+  for (const t of out.tracks ?? []) {
+    for (const ev of t.events ?? []) {
+      if (typeof ev.step === "number" && typeof ev.dur === "number") {
+        const maxDur = totalSteps - ev.step;
+        if (maxDur >= 1 && ev.dur > maxDur) ev.dur = maxDur;
+      }
+    }
+  }
+  return out;
+}
+
 /** @returns {{ ok: boolean, errors: string[] }} */
 export function validateSong(song) {
   const errors = [];

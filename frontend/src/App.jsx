@@ -15,10 +15,10 @@ export default function App() {
 
   useEffect(() => {
     const p = createPlayer();
-    p.on("step", setStep);
-    p.on("error", (e) => console.warn("player:", e));
+    const offStep = p.on("step", setStep);
+    const offErr = p.on("error", (e) => console.warn("player:", e));
     playerRef.current = p;
-    return () => p.dispose();
+    return () => { offStep(); offErr(); p.dispose(); };
   }, []);
 
   async function send() {

@@ -2,7 +2,7 @@
 // on failure feeding the errors back. Returns { song, message } or throws with
 // a .code matching the HTTP contract error codes.
 import { generateSong } from "./llm.js";
-import { validateSong } from "./validate.js";
+import { normalizeSong, validateSong } from "./validate.js";
 
 const MAX_RETRIES = 2;
 
@@ -19,9 +19,10 @@ export async function compose({ prompt, song }) {
       throw err;
     }
 
-    const { ok, errors } = validateSong(result?.song);
+    const outSong = normalizeSong(result?.song);
+    const { ok, errors } = validateSong(outSong);
     if (ok) {
-      return { song: result.song, message: result.message ?? "" };
+      return { song: outSong, message: result.message ?? "" };
     }
     previousErrors = errors;
     console.warn(`compose: invalid Song (attempt ${attempt + 1}):`, errors);

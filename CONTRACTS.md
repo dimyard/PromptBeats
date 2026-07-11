@@ -39,9 +39,9 @@
   "tracks": [
     {
       "id": "drums",            // string, уникален в песне
-      "role": "drums",          // enum: drums|bass|chords|lead|pad|fx
+      "role": "drums",          // enum: drums|bass|chords|lead|pad|fx — ОБЯЗАТЕЛЬНО
       "instrument": "sampler",  // enum: synth|sampler
-      "sound": "lofi_kit",      // string из каталога (см. ниже) — валидируется
+      "sound": "lofi_kit",      // из каталога; ПАРА обязана совпадать: sampler→kit, synth→synth
       "gain": 0.9,              // number 0..1, опционально (default 0.8)
       "muted": false,           // bool, опционально (default false)
       "events": [               // массив событий (единый формат для всех дорожек)
@@ -69,6 +69,14 @@
 - `note` — научная нотация высоты: `"C2"`, `"A#3"`, `"Gb4"`. Для ударных `note` выбирает элемент кита (см. drum map).
 - `dur` — int, длительность в шагах, `>=1`, опционально (default 1). Для ударных обычно 1.
 - `vel` — number, громкость ноты `0..1`, опционально (default 0.8).
+
+**Правило `step + dur`:** нота не должна выходить за конец лупа. Инвариант: `step + dur <= bars*16`.
+Это не режется как ошибка — бэк **нормализует** (клампит `dur` до конца лупа) перед валидацией
+(`normalizeSong` в `backend/src/validate.js`), а плеер клампит защитно на своей стороне.
+События с `step` вне `0..bars*16-1` плеер пропускает и репортит через событие `error` (см. Контракт 3).
+
+**Пары instrument↔sound (жёсткий инвариант, проверяется схемой через `if/then`):**
+`instrument: "synth"` → `sound` только из синтов; `instrument: "sampler"` → `sound` только из китов.
 
 ### Каталог звуков (enum для поля `sound`)
 Синты (без ассетов, чистый Tone.js): `sine_bass`, `saw_lead`, `square_lead`, `soft_pad`, `pluck`, `fm_bell`.
@@ -147,8 +155,10 @@ export interface Player {
   /** Останавливает и сбрасывает позицию в 0. */
   stop(): void;
   isPlaying(): boolean;
-  /** События для UI. "step" — текущий шаг для плейхеда; "ready"/"error" — статус. */
-  on(event: "step" | "ready" | "error", cb: (payload: any) => void): void;
+  /** Подписка на события. Возвращает функцию отписки (важно для React-размонтирования). */
+  on(event: "step",  cb: (step: number) => void): () => void;
+  on(event: "ready", cb: (p: { totalSteps: number }) => void): () => void;
+  on(event: "error", cb: (e: PlayerError) => void): () => void;
   /** Растяжка: офлайн-рендер в WAV. */
   exportWav?(song: Song): Promise<Blob>;
   /** Освобождает ресурсы Tone (при размонтировании). */
@@ -156,7 +166,19 @@ export interface Player {
 }
 
 export function createPlayer(): Player;
+
+/** Payload события "error". */
+export interface PlayerError {
+  code: "unknown_sound" | "event_out_of_range" | "load_failed";
+  message: string;
+  details?: Record<string, unknown>;
+}
 ```
+
+**Payload'ы событий (фиксированы):**
+- `"step"` → `number` (текущий шаг, 0-based).
+- `"ready"` → `{ totalSteps: number }`.
+- `"error"` → `{ code, message, details? }` (см. `PlayerError`). Ошибки не роняют плеер.
 
 **Контракт использования (как зовёт фронт A):**
 ```ts
