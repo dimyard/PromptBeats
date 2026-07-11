@@ -106,6 +106,21 @@ export function addTrack(song, options, catalog = FALLBACK_CATALOG) {
   };
 }
 
+export function moveTrack(song, fromTrackId, toTrackId) {
+  const tracks = song.tracks ?? [];
+  const fromIndex = tracks.findIndex((track) => track.id === fromTrackId);
+  const toIndex = tracks.findIndex((track) => track.id === toTrackId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return song;
+
+  const nextTracks = [...tracks];
+  const [moved] = nextTracks.splice(fromIndex, 1);
+  nextTracks.splice(toIndex, 0, moved);
+  return {
+    ...song,
+    tracks: nextTracks,
+  };
+}
+
 export function setTrackMuted(song, trackId, muted) {
   return updateTrack(song, trackId, (track) => ({ ...track, muted: Boolean(muted) }));
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addTrack,
+  moveTrack,
   setSongBars,
   setSongBpm,
   setTrackGain,
@@ -81,5 +82,17 @@ describe("song editing helpers", () => {
     assert.equal(added.instrument, "sampler");
     assert.equal(added.sound, "trap_kit");
     assert.deepEqual(added.events, []);
+  });
+
+  it("moves tracks by id without changing track objects", () => {
+    const next = moveTrack(song, "bass", "drums");
+    assert.deepEqual(next.tracks.map((track) => track.id), ["bass", "drums"]);
+    assert.equal(next.tracks[0], song.tracks[1]);
+    assert.deepEqual(song.tracks.map((track) => track.id), ["drums", "bass"]);
+  });
+
+  it("keeps the same song when moving unknown or same track", () => {
+    assert.equal(moveTrack(song, "missing", "drums"), song);
+    assert.equal(moveTrack(song, "drums", "drums"), song);
   });
 });

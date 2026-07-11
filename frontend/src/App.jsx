@@ -8,6 +8,7 @@ import {
   DRUM_NOTE_LABELS,
   DRUM_NOTES,
   FALLBACK_CATALOG,
+  moveTrack,
   normalizeSongForLoop,
   setSongBars,
   setSongBpm,
@@ -118,6 +119,8 @@ export default function App() {
   const [rendering, setRendering] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [draggedTrackId, setDraggedTrackId] = useState("");
+  const [dropTargetTrackId, setDropTargetTrackId] = useState("");
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -398,6 +401,11 @@ export default function App() {
     );
   }
 
+  function reorderTrack(fromTrackId, toTrackId) {
+    if (!fromTrackId || !toTrackId || fromTrackId === toTrackId || busy) return;
+    applySongEdit((current) => moveTrack(current, fromTrackId, toTrackId), "Порядок дорожек обновлён");
+  }
+
   function openImport() {
     setImportError("");
     setImportState("idle");
@@ -601,7 +609,13 @@ export default function App() {
         </header>
 
         <div className="control-strip" aria-label="Ручные контролы песни">
-          <MetaControl label="BPM" value={song?.bpm ?? "-"} disabled={!song || busy} onDec={() => applySongEdit((current) => setSongBpm(current, current.bpm - 1))} onInc={() => applySongEdit((current) => setSongBpm(current, current.bpm + 1))} />
+          <BpmControl
+            value={song?.bpm ?? ""}
+            disabled={!song || busy}
+            onDec={() => applySongEdit((current) => setSongBpm(current, current.bpm - 1))}
+            onInc={() => applySongEdit((current) => setSongBpm(current, current.bpm + 1))}
+            onCommit={(nextBpm) => applySongEdit((current) => setSongBpm(current, nextBpm), "BPM обновлён")}
+          />
           <label className="meta-card meta-select">
             <span>Bars</span>
             <select
@@ -680,7 +694,36 @@ export default function App() {
               busy={busy}
               catalog={catalog}
               selectedDrumNote={drumNotes[track.id] ?? "C2"}
+              dragged={draggedTrackId === track.id}
+              dropTarget={dropTargetTrackId === track.id && draggedTrackId !== track.id}
               onSelectedDrumNoteChange={(note) => setDrumNotes((current) => ({ ...current, [track.id]: note }))}
+              onDragStart={(event) => {
+                setDraggedTrackId(track.id);
+                setDropTargetTrackId("");
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("application/x-promptbeats-track", track.id);
+                event.dataTransfer.setData("text/plain", track.id);
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setDropTargetTrackId(track.id);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTargetTrackId(track.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const fromTrackId = event.dataTransfer.getData("application/x-promptbeats-track") || draggedTrackId;
+                setDraggedTrackId("");
+                setDropTargetTrackId("");
+                reorderTrack(fromTrackId, track.id);
+              }}
+              onDragEnd={() => {
+                setDraggedTrackId("");
+                setDropTargetTrackId("");
+              }}
               onToggleMute={() =>
                 applySongEdit((current) => setTrackMuted(current, track.id, !track.muted), track.muted ? "Дорожка включена" : "Дорожка muted")
               }
@@ -786,16 +829,53 @@ function MetaCard({ label, value }) {
   );
 }
 
-function MetaControl({ label, value, disabled, onDec, onInc }) {
+function BpmControl({ value, disabled, onDec, onInc, onCommit }) {
+  const [draft, setDraft] = useState(value === "" ? "" : String(value));
+
+  useEffect(() => {
+    setDraft(value === "" ? "" : String(value));
+  }, [value]);
+
+  function commit() {
+    if (disabled) return;
+    const nextValue = Number(draft);
+    if (!Number.isFinite(nextValue)) {
+      setDraft(value === "" ? "" : String(value));
+      return;
+    }
+    onCommit(nextValue);
+  }
+
   return (
-    <div className="meta-card meta-stepper">
-      <span>{label}</span>
+    <div className="meta-card meta-stepper meta-bpm">
+      <span>BPM</span>
       <div>
-        <button type="button" onClick={onDec} disabled={disabled} aria-label={`${label} минус`}>
+        <button type="button" onClick={onDec} disabled={disabled} aria-label="BPM минус">
           −
         </button>
-        <strong>{value}</strong>
-        <button type="button" onClick={onInc} disabled={disabled} aria-label={`${label} плюс`}>
+        <input
+          type="number"
+          min="40"
+          max="220"
+          step="1"
+          inputMode="numeric"
+          value={draft}
+          disabled={disabled}
+          aria-label="BPM"
+          onChange={(event) => setDraft(event.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+          onBlur={commit}
+          onFocus={(event) => event.target.select()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+            if (event.key === "Escape") {
+              setDraft(value === "" ? "" : String(value));
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        <button type="button" onClick={onInc} disabled={disabled} aria-label="BPM плюс">
           +
         </button>
       </div>
@@ -832,7 +912,14 @@ function TrackRow({
   busy,
   catalog,
   selectedDrumNote,
+  dragged,
+  dropTarget,
   onSelectedDrumNoteChange,
+  onDragStart,
+  onDragEnter,
+  onDragOver,
+  onDrop,
+  onDragEnd,
   onToggleMute,
   onGainChange,
   onSoundChange,
@@ -853,10 +940,40 @@ function TrackRow({
 
   return (
     <article
-      className={`track-row role-${track.role} ${track.muted ? "is-muted" : ""} ${energy ? "is-hot" : ""}`}
+      className={`track-row role-${track.role} ${track.muted ? "is-muted" : ""} ${energy ? "is-hot" : ""} ${dragged ? "is-dragging" : ""} ${dropTarget ? "is-drop-target" : ""}`}
       style={{ "--meter-height": `${8 + energy * 92}%` }}
+      onDragEnter={(event) => {
+        event.stopPropagation();
+        onDragEnter(event);
+      }}
+      onDragOver={(event) => {
+        event.stopPropagation();
+        onDragOver(event);
+      }}
+      onDrop={(event) => {
+        event.stopPropagation();
+        onDrop(event);
+      }}
     >
       <div className="track-info">
+        <button
+          className="track-drag-handle"
+          type="button"
+          draggable={!busy}
+          disabled={busy}
+          aria-label={`Переместить дорожку ${track.id}`}
+          title="Перетащить дорожку"
+          onDragStart={(event) => {
+            event.stopPropagation();
+            onDragStart(event);
+          }}
+          onDragEnd={(event) => {
+            event.stopPropagation();
+            onDragEnd(event);
+          }}
+        >
+          ⋮⋮
+        </button>
         <div className="track-name">
           <strong>{ROLE_LABELS[track.role] ?? track.role ?? track.id}</strong>
           <span>{track.id}</span>
