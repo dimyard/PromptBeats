@@ -20,3 +20,16 @@ test("compose edit (mock) -> schema-valid song", async () => {
   assert.equal(validateSong(song).ok, true);
   assert.equal(song.bpm, 87); // +15
 });
+
+test("backend validation accepts expanded catalog", () => {
+  const song = {
+    version: 1,
+    bpm: 110,
+    bars: 1,
+    tracks: [
+      { id: "drums", role: "drums", instrument: "sampler", sound: "techno_kit", events: [{ step: 0, note: "C2" }] },
+      { id: "keys", role: "chords", instrument: "synth", sound: "warm_keys", events: [{ step: 0, note: "C4", dur: 4 }] },
+    ],
+  };
+  assert.equal(validateSong(song).ok, true);
+});

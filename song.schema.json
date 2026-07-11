@@ -27,11 +27,11 @@
       "allOf": [
         {
           "if": { "properties": { "instrument": { "const": "synth" } } },
-          "then": { "properties": { "sound": { "enum": ["sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell"] } } }
+          "then": { "properties": { "sound": { "enum": ["sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell", "warm_keys", "acid_bass", "organ", "wide_pad"] } } }
         },
         {
           "if": { "properties": { "instrument": { "const": "sampler" } } },
-          "then": { "properties": { "sound": { "enum": ["lofi_kit", "house_kit", "trap_kit"] } } }
+          "then": { "properties": { "sound": { "enum": ["lofi_kit", "house_kit", "trap_kit", "boom_bap_kit", "techno_kit"] } } }
         }
       ],
       "properties": {
@@ -41,7 +41,8 @@
         "sound": {
           "enum": [
             "sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell",
-            "lofi_kit", "house_kit", "trap_kit"
+            "warm_keys", "acid_bass", "organ", "wide_pad",
+            "lofi_kit", "house_kit", "trap_kit", "boom_bap_kit", "techno_kit"
           ]
         },
         "gain": { "type": "number", "minimum": 0, "maximum": 1 },

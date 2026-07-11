@@ -118,6 +118,20 @@ test("accepts the sample fixture", () => {
   assert.equal(res.ok, true, res.errors.join("; "));
 });
 
+test("accepts expanded synth and sampler catalog", () => {
+  const song = baseSong();
+  song.tracks[0].sound = "boom_bap_kit";
+  song.tracks.push({
+    id: "keys",
+    role: "chords",
+    instrument: "synth",
+    sound: "warm_keys",
+    events: [{ step: 0, note: "C4", dur: 4 }],
+  });
+  const res = validateSong(song);
+  assert.equal(res.ok, true, res.errors.join("; "));
+});
+
 // ---- parseSong -----------------------------------------------------------
 
 test("parseSong rejects broken JSON text", () => {

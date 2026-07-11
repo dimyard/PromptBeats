@@ -63,9 +63,9 @@ describe("song editing helpers", () => {
 
   it("keeps sound compatible with instrument", () => {
     const bad = setTrackSound(song, "drums", "sine_bass");
-    const good = setTrackSound(song, "drums", "trap_kit");
+    const good = setTrackSound(song, "drums", "techno_kit");
     assert.equal(bad.tracks[0].sound, "lofi_kit");
-    assert.equal(good.tracks[0].sound, "trap_kit");
+    assert.equal(good.tracks[0].sound, "techno_kit");
   });
 
   it("toggles sampler hits in track.events", () => {

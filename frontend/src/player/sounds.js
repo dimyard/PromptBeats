@@ -20,9 +20,15 @@ export const SYNTH_SOUNDS = Object.freeze([
   "soft_pad",
   "pluck",
   "fm_bell",
+  "warm_keys",
+  "acid_bass",
+  "organ",
+  "wide_pad",
 ]);
 
-export const KIT_SOUNDS = Object.freeze(["lofi_kit", "house_kit", "trap_kit"]);
+export const KIT_SOUNDS = Object.freeze([
+  "lofi_kit", "house_kit", "trap_kit", "boom_bap_kit", "techno_kit",
+]);
 
 const SYNTH_SOUND_SET = new Set(SYNTH_SOUNDS);
 const KIT_SOUND_SET = new Set(KIT_SOUNDS);
@@ -76,6 +82,28 @@ export function makeSynth(sound) {
         envelope: { attack: 0.01, decay: 0.18, sustain: 0.08, release: 0.85 },
         modulationEnvelope: { attack: 0.004, decay: 0.28, sustain: 0, release: 0.55 },
       });
+    case "warm_keys":
+      return new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "triangle8" },
+        envelope: { attack: 0.018, decay: 0.3, sustain: 0.48, release: 1.1 },
+      });
+    case "acid_bass":
+      return new Tone.MonoSynth({
+        oscillator: { type: "sawtooth" },
+        filter: { Q: 6, type: "lowpass", rolloff: -24 },
+        envelope: { attack: 0.004, decay: 0.16, sustain: 0.38, release: 0.16 },
+        filterEnvelope: { attack: 0.002, decay: 0.24, sustain: 0.17, release: 0.15, baseFrequency: 55, octaves: 4.2 },
+      });
+    case "organ":
+      return new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "square", partials: [1, 0.8, 0.4, 0.2] },
+        envelope: { attack: 0.01, decay: 0.08, sustain: 0.9, release: 0.32 },
+      });
+    case "wide_pad":
+      return new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "fatsawtooth", count: 2, spread: 20 },
+        envelope: { attack: 0.22, decay: 0.6, sustain: 0.62, release: 2.1 },
+      });
     default:
       return null;
   }
@@ -96,6 +124,16 @@ const KIT_PROFILES = {
     kickNote: "C0", kickOctaves: 8, kickDecay: 0.055, kickDuration: "8n",
     snareNoise: "white", snareDecay: 0.09, hatNoise: "white", hatDecay: 0.018,
     openHatDecay: 0.16, rideDecay: 0.5, tomNote: "E1", clapDelay: 0.014,
+  },
+  boom_bap_kit: {
+    kickNote: "C1", kickOctaves: 3.8, kickDecay: 0.11, kickDuration: "8n",
+    snareNoise: "pink", snareDecay: 0.25, hatNoise: "pink", hatDecay: 0.06,
+    openHatDecay: 0.28, rideDecay: 0.75, tomNote: "F1", clapDelay: 0.03,
+  },
+  techno_kit: {
+    kickNote: "C1", kickOctaves: 9, kickDecay: 0.02, kickDuration: "4n",
+    snareNoise: "white", snareDecay: 0.08, hatNoise: "white", hatDecay: 0.022,
+    openHatDecay: 0.2, rideDecay: 1.1, tomNote: "B1", clapDelay: 0.012,
   },
 };
 

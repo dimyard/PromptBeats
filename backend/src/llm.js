@@ -18,7 +18,7 @@
 // lives in providers.js.
 // ============================================================================
 
-import { CATALOG } from "./catalog.js";
+import { CATALOG, SOUND_DESCRIPTIONS } from "./catalog.js";
 import { callLLM } from "./providers.js";
 
 // --- System prompt (built from the catalog so it can't drift out of sync) ---
@@ -29,11 +29,17 @@ const DRUM_MAP = [
   ["F#2", "closed hat"],
   ["A#2", "open hat"],
   ["E2", "tom"],
-  ["C#3", "ride/crash"],
+  ["C#3", "ride"],
 ];
 
 function buildSystemPrompt() {
   const drumRows = DRUM_MAP.map(([n, el]) => `  ${n} = ${el}`).join("\n");
+  const synthRows = CATALOG.synths
+    .map((sound) => `          ${sound} — ${SOUND_DESCRIPTIONS[sound]}`)
+    .join("\n");
+  const kitRows = CATALOG.kits
+    .map((sound) => `          ${sound} — ${SOUND_DESCRIPTIONS[sound]}`)
+    .join("\n");
   return `Ты — музыкальный аранжировщик PromptBeats. По текстовому пожеланию ты собираешь
 короткий закольцованный трек и возвращаешь его СТРОГО как Song JSON.
 
@@ -55,8 +61,10 @@ SONG JSON:
     role — одно из: ${CATALOG.roles.join(", ")},
     instrument — "synth" или "sampler",
     sound — из каталога, ПАРА обязана совпадать:
-        synth  -> только синты: ${CATALOG.synths.join(", ")}
-        sampler-> только киты:  ${CATALOG.kits.join(", ")}
+        synth  -> только синты:
+${synthRows}
+        sampler-> только киты:
+${kitRows}
     gain — 0..1 (опц., по умолчанию 0.8), muted — bool (опц.),
     events — массив нот.
 
