@@ -22,6 +22,7 @@
 // ============================================================================
 
 import { fetch, ProxyAgent } from "undici";
+import { withRetry, retryAfterMs } from "./retry.js";
 
 const DEFAULT_MODEL = {
   anthropic: "claude-haiku-4-5",
@@ -30,21 +31,40 @@ const DEFAULT_MODEL = {
   mock: "mock",
 };
 
-const MAX_TOKENS = 4096;
+const KEY_ENV = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
+};
+
+/** Numeric env var with fallback (empty/invalid -> default). */
+function numEnv(name, def) {
+  const v = process.env[name];
+  if (v == null || v === "") return def;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+const maxTokens = () => numEnv("LLM_MAX_TOKENS", 4096);
+const temperature = () => numEnv("LLM_TEMPERATURE", 0.4);
 
 // --- Proxy (opt-in) ---------------------------------------------------------
 // Resolved once, lazily, and reused (connection pooling). Env is read on the
 // first request so dotenv is guaranteed loaded and tests can set it freely.
-let _dispatcher; // undefined = unresolved; null = no proxy configured
-function getDispatcher() {
-  if (_dispatcher !== undefined) return _dispatcher;
-  const url =
+function resolveProxyUrl() {
+  return (
     process.env.LLM_PROXY ||
     process.env.HTTPS_PROXY ||
     process.env.https_proxy ||
     process.env.HTTP_PROXY ||
     process.env.http_proxy ||
-    "";
+    ""
+  );
+}
+
+let _dispatcher; // undefined = unresolved; null = no proxy configured
+function getDispatcher() {
+  if (_dispatcher !== undefined) return _dispatcher;
+  const url = resolveProxyUrl();
   if (url) {
     _dispatcher = new ProxyAgent(url);
     const safe = url.replace(/\/\/[^@/]*@/, "//***@"); // mask credentials in logs
@@ -55,10 +75,29 @@ function getDispatcher() {
   return _dispatcher;
 }
 
-/** fetch wrapper that injects the proxy dispatcher when one is configured. */
-function llmFetch(url, opts = {}) {
+/**
+ * fetch wrapper: injects the proxy dispatcher and enforces LLM_TIMEOUT_MS.
+ * On timeout throws an error tagged code "LLM_TIMEOUT" (not retried).
+ */
+async function llmFetch(url, opts = {}) {
   const dispatcher = getDispatcher();
-  return dispatcher ? fetch(url, { ...opts, dispatcher }) : fetch(url, opts);
+  const timeoutMs = numEnv("LLM_TIMEOUT_MS", 30000);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const o = { ...opts, signal: ctrl.signal };
+    if (dispatcher) o.dispatcher = dispatcher;
+    return await fetch(url, o);
+  } catch (e) {
+    if (ctrl.signal.aborted) {
+      const err = new Error(`LLM request timed out after ${timeoutMs}ms`);
+      err.code = "LLM_TIMEOUT";
+      throw err;
+    }
+    throw e; // network error — classified as transient by retry.js
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Resolves { provider, model } from env, with sane defaults. */
@@ -83,14 +122,24 @@ function requireKey(name) {
   return v;
 }
 
-async function readErr(res) {
+/** Build an Error carrying the provider HTTP status (for retry classification). */
+async function httpError(name, res) {
   let body = "";
-  try {
-    body = await res.text();
-  } catch {
-    /* ignore */
-  }
-  return `${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 500)}` : ""}`;
+  try { body = await res.text(); } catch { /* ignore */ }
+  const err = new Error(
+    `${name} error: ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 500)}` : ""}`
+  );
+  err.status = res.status;
+  const ra = retryAfterMs(res.headers.get("retry-after"));
+  if (ra != null) err.retryAfterMs = ra;
+  return err;
+}
+
+/** Error for truncated output (max_tokens reached) — retrying as-is won't help. */
+function truncatedError(name) {
+  const err = new Error(`${name} output truncated (hit max_tokens). Increase LLM_MAX_TOKENS.`);
+  err.transient = false;
+  return err;
 }
 
 // --- Anthropic (Messages API) ----------------------------------------------
@@ -102,10 +151,11 @@ async function callAnthropic({ system, messages, model }) {
       "x-api-key": requireKey("ANTHROPIC_API_KEY"),
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({ model, max_tokens: MAX_TOKENS, system, messages }),
+    body: JSON.stringify({ model, max_tokens: maxTokens(), temperature: temperature(), system, messages }),
   });
-  if (!res.ok) throw new Error(`Anthropic error: ${await readErr(res)}`);
+  if (!res.ok) throw await httpError("Anthropic", res);
   const data = await res.json();
+  if (data.stop_reason === "max_tokens") throw truncatedError("Anthropic");
   const text = (data.content ?? [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
@@ -124,13 +174,15 @@ async function callOpenAI({ system, messages, model }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: maxTokens(),
+      temperature: temperature(),
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: system }, ...messages],
     }),
   });
-  if (!res.ok) throw new Error(`OpenAI error: ${await readErr(res)}`);
+  if (!res.ok) throw await httpError("OpenAI", res);
   const data = await res.json();
+  if (data.choices?.[0]?.finish_reason === "length") throw truncatedError("OpenAI");
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error("OpenAI returned empty content");
   return text;
@@ -152,12 +204,14 @@ async function callGemini({ system, messages, model }) {
       contents,
       generationConfig: {
         responseMimeType: "application/json",
-        maxOutputTokens: MAX_TOKENS,
+        maxOutputTokens: maxTokens(),
+        temperature: temperature(),
       },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini error: ${await readErr(res)}`);
+  if (!res.ok) throw await httpError("Gemini", res);
   const data = await res.json();
+  if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") throw truncatedError("Gemini");
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join("");
   if (!text) throw new Error("Gemini returned empty content");
   return text;
@@ -224,12 +278,36 @@ const ADAPTERS = {
   mock: callMock,
 };
 
+/** Asserts the configured provider has its API key (except mock). Call at boot. */
+export function assertProviderConfig() {
+  const { provider, model } = resolveProviderConfig();
+  if (provider !== "mock" && !process.env[KEY_ENV[provider]]) {
+    throw new Error(`LLM_PROVIDER=${provider} but ${KEY_ENV[provider]} is not set (see backend/.env).`);
+  }
+  return { provider, model };
+}
+
+/** Health/info snapshot (no secrets — proxy is a boolean flag). */
+export function getHealthInfo() {
+  const { provider, model } = resolveProviderConfig();
+  return { provider, model, proxy: !!resolveProxyUrl() };
+}
+
 /**
- * Sends a chat request to the configured provider.
+ * Sends a chat request to the configured provider, retrying transient provider
+ * errors (429/5xx/network) with backoff. Validation retries are handled
+ * separately by compose.js.
  * @param {{ system: string, messages: {role:string,content:string}[] }} args
  * @returns {Promise<string>} raw model text
  */
 export async function callLLM({ system, messages }) {
   const { provider, model } = resolveProviderConfig();
-  return ADAPTERS[provider]({ system, messages, model });
+  const retries = provider === "mock" ? 0 : numEnv("LLM_NET_RETRIES", 2);
+  return withRetry(() => ADAPTERS[provider]({ system, messages, model }), {
+    retries,
+    onRetry: ({ attempt, delay, error }) =>
+      console.warn(
+        `[llm] transient error (${error.status ?? error.code ?? error.name}); retry ${attempt} in ${delay}ms`
+      ),
+  });
 }

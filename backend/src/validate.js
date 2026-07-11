@@ -13,24 +13,52 @@ const ajv = new Ajv({ allErrors: true });
 const validateSchema = ajv.compile(schema);
 
 /**
- * Normalizes a Song in place-safe way (returns a fixed clone) before validation.
- * Currently: clamps each event's `dur` so `step + dur <= bars*16` (notes never
- * overhang the loop). Add further gentle fixes here rather than rejecting.
- * @returns {object} normalized song
+ * Gently fixes a Song (on a clone) before validation so trivial, unambiguous
+ * LLM mistakes don't burn a retry. Does NOT touch semantic mistakes (unknown
+ * `sound`, wrong instrument↔sound pair, missing `role`) — those stay errors so
+ * the retry loop asks the model to fix them.
+ *   - clamps each event's `dur` so `step + dur <= bars*16`;
+ *   - drops events whose `step` is outside `0..bars*16-1` (would never play);
+ *   - renames duplicate track `id`s (`x` -> `x-2`, `x-3`, …) to keep them unique.
+ * @returns {{ song: object, stats: { clampedDurs:number, droppedEvents:number, renamedIds:number } }}
  */
 export function normalizeSong(song) {
-  if (!song || typeof song !== "object") return song;
+  const stats = { clampedDurs: 0, droppedEvents: 0, renamedIds: 0 };
+  if (!song || typeof song !== "object") return { song, stats };
   const out = structuredClone(song);
   const totalSteps = (out.bars ?? 0) * 16;
+  const seenIds = new Set();
+
   for (const t of out.tracks ?? []) {
-    for (const ev of t.events ?? []) {
-      if (typeof ev.step === "number" && typeof ev.dur === "number") {
-        const maxDur = totalSteps - ev.step;
-        if (maxDur >= 1 && ev.dur > maxDur) ev.dur = maxDur;
+    // Dedup track ids.
+    if (t && typeof t.id === "string") {
+      if (seenIds.has(t.id)) {
+        const base = t.id;
+        let n = 2, cand = `${base}-${n}`;
+        while (seenIds.has(cand)) cand = `${base}-${++n}`;
+        t.id = cand;
+        stats.renamedIds++;
       }
+      seenIds.add(t.id);
+    }
+    // Filter/clamp events.
+    if (Array.isArray(t?.events)) {
+      const kept = [];
+      for (const ev of t.events) {
+        if (typeof ev.step === "number" && (ev.step < 0 || ev.step > totalSteps - 1)) {
+          stats.droppedEvents++;
+          continue;
+        }
+        if (typeof ev.step === "number" && typeof ev.dur === "number") {
+          const maxDur = totalSteps - ev.step;
+          if (maxDur >= 1 && ev.dur > maxDur) { ev.dur = maxDur; stats.clampedDurs++; }
+        }
+        kept.push(ev);
+      }
+      t.events = kept;
     }
   }
-  return out;
+  return { song: out, stats };
 }
 
 /** @returns {{ ok: boolean, errors: string[] }} */

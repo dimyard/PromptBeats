@@ -19,7 +19,13 @@ export async function compose({ prompt, song }) {
       throw err;
     }
 
-    const outSong = normalizeSong(result?.song);
+    const { song: outSong, stats } = normalizeSong(result?.song);
+    if (stats.droppedEvents || stats.renamedIds || stats.clampedDurs) {
+      console.log(
+        `compose: normalized (dropped ${stats.droppedEvents} oob events, ` +
+          `renamed ${stats.renamedIds} dup ids, clamped ${stats.clampedDurs} durs)`
+      );
+    }
     const { ok, errors } = validateSong(outSong);
     if (ok) {
       return { song: outSong, message: result.message ?? "" };
