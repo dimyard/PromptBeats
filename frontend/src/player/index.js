@@ -51,6 +51,10 @@ export function createPlayer() {
     return Math.min(totalSteps - 1, Math.max(0, rawStep));
   }
 
+  // Read-only spectrum tap on the master output (UI VU meter). Additive: audio is unaffected.
+  const analyser = new Tone.Analyser("fft", 128);
+  analyser.smoothing = 0.4;
+
   function teardown({ clearStepScheduler = false } = {}) {
     if (clearStepScheduler && stepEventId !== null) {
       Tone.Transport.clear(stepEventId);
@@ -69,6 +73,7 @@ export function createPlayer() {
     const masterGain = new Tone.Gain(MASTER_GAIN);
     const limiter = new Tone.Limiter(LIMITER_THRESHOLD_DB).toDestination();
     masterGain.connect(limiter);
+    limiter.connect(analyser); // fan-out tap; does not alter the signal reaching the speakers
     masterNodes = [masterGain, limiter];
     return masterGain;
   }
@@ -324,6 +329,8 @@ export function createPlayer() {
     play,
     stop,
     isPlaying: () => playing,
+    /** Current master-output FFT magnitudes (Float32Array of dB) for the UI VU meter. */
+    getWaveform: () => analyser.getValue(),
     /** Subscribe to "step" | "ready" | "error". Returns an unsubscribe fn. */
     on: (event, cb) => {
       const arr = (listeners[event] ||= []);
@@ -336,6 +343,7 @@ export function createPlayer() {
     dispose: () => {
       stop();
       teardown({ clearStepScheduler: true });
+      analyser.dispose();
     },
     exportWav,
   };

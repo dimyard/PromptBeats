@@ -288,12 +288,12 @@ summary:focus-visible {
 
 .status-playing .status-dot,
 .status-loading .status-dot {
-  animation: statusPulse 0.85s ease-in-out infinite;
+  animation: statusPulse 1.5s ease-in-out infinite;
 }
 
 @keyframes statusPulse {
   50% {
-    opacity: 0.35;
+    opacity: 0.62;
   }
 }
 
@@ -795,106 +795,405 @@ summary:focus-visible {
   font-size: 0.65rem;
 }
 
-.eq-bars {
+/* ---- Turntable (vinyl centerpiece) ------------------------------------- */
+.turntable {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Subtle vinyl grain + groove haze on the panel (texture, not a decorative blob). */
+.turntable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+  background:
+    radial-gradient(circle at 50% 64%, color-mix(in srgb, var(--mood) 9%, transparent), transparent 62%),
+    repeating-radial-gradient(circle at 50% 64%, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px);
+}
+
+.turntable > * {
+  position: relative;
+  z-index: 1;
+}
+
+.deck {
+  position: relative;
   display: flex;
-  align-items: flex-end;
-  gap: 0.18rem;
-  height: 7.5rem;
-  overflow: hidden;
-  border-radius: 0.45rem;
-}
-
-.eq-bars i {
-  flex: 1;
-  min-width: 2px;
-  height: var(--bar-height);
-  border-radius: 2px 2px 0 0;
-  background: var(--mood);
-  opacity: var(--active-opacity, 0.58);
-  transition:
-    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 220ms ease,
-    opacity 220ms ease;
-}
-
-.visualizer.is-generating .eq-bars i {
-  background: var(--cyan);
-  animation: shimmer 1.15s ease-in-out infinite;
-  animation-delay: var(--bar-delay);
-}
-
-.visualizer.is-error {
-  border-color: rgba(255, 107, 95, 0.38);
-}
-
-.visualizer.is-error .eq-bars i,
-.visualizer.is-error .beat-pulse-grid i,
-.visualizer.is-error .visual-ruler i {
-  background: var(--coral);
-  opacity: 0.35;
-}
-
-.eq-bars.is-skyline {
   align-items: center;
+  justify-content: center;
+  height: 16rem;
 }
 
-.eq-bars.is-skyline i {
-  border-radius: 999px;
-  transform: translateY(calc((100% - var(--bar-height)) / 10));
+/* Real master-output oscilloscope, flanking the record and fading into it. */
+.waveform {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--mood);
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 0 9.5rem, #000 12.5rem);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 0 9.5rem, #000 12.5rem);
 }
 
-.eq-bars.is-shimmer i {
-  background: var(--cyan);
-  animation: shimmer 1.15s ease-in-out infinite;
-  animation-delay: var(--bar-delay);
+.turntable.is-generating .waveform {
+  color: var(--cyan);
 }
 
-.beat-pulse-grid,
-.visual-ruler {
+/* Fixed-size stage keeps the tonearm geometry stable regardless of panel width. */
+.deck-stage {
+  position: relative;
+  z-index: 1;
+  width: 13rem;
+  height: 13rem;
+}
+
+/* Soft static halo that gently swells on beats (smoothed by a long transition). */
+.deck-glow {
+  position: absolute;
+  inset: -1.6rem;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--mood) 42%, transparent), transparent 46%);
+  transition: opacity 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.turntable.is-playing .deck-glow {
+  opacity: calc(0.14 + var(--platter-energy, 0) * 0.26);
+}
+
+.turntable.is-generating .deck-glow {
+  opacity: 0.18;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--cyan) 42%, transparent), transparent 46%);
+}
+
+.platter {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(16, minmax(0, 1fr));
-  gap: 0.22rem;
-  height: 7.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 42% 36%, rgba(255, 255, 255, 0.05), transparent 46%),
+    #0c0d0f;
+  box-shadow:
+    0 1.4rem 2.6rem rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: record-drop 540ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.beat-pulse-grid i,
-.visual-ruler i {
-  border: 1px solid var(--line-soft);
-  border-radius: 0.32rem;
-  background: color-mix(in srgb, var(--lime) 18%, var(--raised));
-  opacity: 0.55;
-  transition:
-    background-color 160ms ease,
-    box-shadow 160ms ease,
-    opacity 160ms ease,
-    transform 160ms ease;
+.record {
+  position: absolute;
+  inset: 0.55rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
+    radial-gradient(circle at 50% 50%, #23272d 0 30%, #16181d 30% 100%);
+  box-shadow: inset 0 0 2.4rem rgba(0, 0, 0, 0.62);
 }
 
-.beat-pulse-grid i {
-  transform: scaleY(max(0.18, calc(var(--cell-level) / 100)));
-  transform-origin: bottom;
+/* Cyan groove wash that pulses while cueing a fresh pressing. */
+.record::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(53, 215, 255, 0) 0 3px,
+    rgba(53, 215, 255, 0.12) 3px 4px
+  );
+  transition: opacity 220ms ease;
 }
 
-.beat-pulse-grid i.is-current,
-.visual-ruler i.is-current {
-  background: var(--amber);
-  box-shadow: inset 0 0 0 1px rgba(255, 200, 87, 0.7);
+.record-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  background: conic-gradient(
+    from 210deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.1) 26deg,
+    transparent 62deg,
+    transparent 212deg,
+    rgba(255, 255, 255, 0.06) 236deg,
+    transparent 272deg
+  );
+}
+
+.turntable.is-playing .record {
+  animation: spin var(--rev, 1.4s) linear infinite;
+}
+
+.turntable.is-generating .record {
+  animation: spin calc(var(--rev, 1.4s) * 0.55) linear infinite;
+  box-shadow:
+    inset 0 0 2.4rem rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(53, 215, 255, 0.32),
+    inset 0 0 1.6rem rgba(53, 215, 255, 0.14);
+}
+
+.turntable.is-generating .record::after {
   opacity: 1;
+  animation: groove-pulse 1.15s ease-in-out infinite;
 }
 
-.visual-ruler {
-  align-items: stretch;
-  height: 3rem;
+.record-label {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  gap: 0.1rem;
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 50%;
+  text-align: center;
+  background: radial-gradient(
+    circle at 50% 38%,
+    color-mix(in srgb, var(--mood) 82%, #101113),
+    color-mix(in srgb, var(--mood) 42%, #101113)
+  );
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
-.visual-ruler i.is-beat {
-  background: color-mix(in srgb, var(--amber) 24%, var(--raised));
+.record-title {
+  max-width: 4rem;
+  overflow: hidden;
+  color: #0c0d0f;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@keyframes shimmer {
+.record-bpm {
+  color: rgba(12, 13, 15, 0.82);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-spindle {
+  position: absolute;
+  z-index: 3;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #0a0b0d;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
+}
+
+/* Soft constant rim; brightness eases up while playing — no hard per-beat blink. */
+.beat-ring {
+  position: absolute;
+  inset: 0.2rem;
+  z-index: 2;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mood) 20%, transparent);
+  transition: opacity 460ms ease, box-shadow 460ms ease;
+}
+
+.turntable.is-playing .beat-ring {
+  opacity: 0.5;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--lime) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--lime) 22%, transparent);
+}
+
+/* Empty spindle: no record loaded. */
+.turntable.is-empty .platter {
+  opacity: 0.62;
+}
+
+.turntable.is-empty .record {
+  background: radial-gradient(circle at 50% 50%, #16181c 0 30%, #101216 100%);
+}
+
+.turntable.is-empty .record-label {
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.turntable.is-empty .record-title,
+.turntable.is-empty .record-bpm {
+  color: var(--dim);
+}
+
+/* Tonearm: pivots at the stage's top-right corner; positive angle drops the
+   head left onto the record and sweeps it inward as the loop plays. */
+.tonearm {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.7rem;
+  z-index: 4;
+  width: 1.2rem;
+  height: 9.5rem;
+  transform-origin: 50% 0.7rem;
+  transform: rotate(var(--arm-angle, 8deg));
+  transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tonearm-pivot {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #3a3f47, #23272d);
+  box-shadow: inset 0 0 0 1px var(--line), 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.tonearm-rod {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  translate: -50% 0;
+  width: 0.2rem;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(#42474f, #23272d);
+}
+
+.tonearm-head {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  translate: -50% 0;
+  width: 0.7rem;
+  height: 1.2rem;
+  border-radius: 2px;
+  background: var(--dim);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition: background 300ms ease, box-shadow 300ms ease;
+}
+
+.turntable.is-playing .tonearm-head {
+  background: var(--amber);
+  box-shadow: 0 0 0.6rem rgba(255, 200, 87, 0.45);
+}
+
+.turntable.is-generating .tonearm-head {
+  background: var(--cyan);
+  box-shadow: 0 0 0.6rem rgba(53, 215, 255, 0.45);
+}
+
+/* 3D turntable start/stop buttons, sitting next to the platter. */
+.deck-controls {
+  position: absolute;
+  left: 1.4rem;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.deck-btn {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 0.85rem;
+  background: radial-gradient(circle at 50% 30%, #2c3138, #191c20 72%);
+  box-shadow:
+    0 0.35rem 0.7rem rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.45);
+  transition: transform 120ms ease, box-shadow 140ms ease, color 160ms ease;
+}
+
+.deck-btn:not(:disabled):hover {
+  color: var(--text);
+}
+
+.deck-btn:not(:disabled):active {
+  transform: translateY(1px);
+  box-shadow:
+    0 0.1rem 0.3rem rgba(0, 0, 0, 0.5),
+    inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.deck-btn.play:not(:disabled):hover {
+  color: var(--lime);
+}
+
+.deck-btn.play.is-on {
+  color: var(--lime);
+  box-shadow:
+    0 0.35rem 0.7rem rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px color-mix(in srgb, var(--lime) 55%, transparent),
+    0 0 0.9rem color-mix(in srgb, var(--lime) 30%, transparent);
+}
+
+.deck-btn.stop:not(:disabled):hover {
+  color: var(--coral);
+}
+
+/* Needle skip on error. */
+.turntable.is-skip .deck-stage {
+  animation: record-skip 0.44s ease;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes groove-pulse {
   50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes record-drop {
+  0% {
+    transform: translateY(-0.9rem) scale(0.94);
+    opacity: 0;
+  }
+  60% {
     opacity: 1;
-    transform: translateY(-0.25rem);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes record-skip {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  18% {
+    transform: translateX(-0.42rem) rotate(-0.6deg);
+  }
+  44% {
+    transform: translateX(0.36rem) rotate(0.5deg);
+  }
+  72% {
+    transform: translateX(-0.2rem) rotate(-0.2deg);
   }
 }
 

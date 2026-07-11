@@ -1,6 +1,6 @@
 // PromptBeats UI. Owner: Human A. Chat -> /api/compose -> player.load -> play.
 // Stage 3: manual Song JSON controls, track lanes, inspector, and beat-reactive visuals.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { compose, getCatalog } from "./api.js";
 import { listLibrary, getLibraryTrack, saveToLibrary } from "./library-api.js";
 import { deriveMusicUiState } from "./musicUiState.js";
@@ -54,8 +54,6 @@ const ROLE_LABELS = {
 };
 
 const BAR_OPTIONS = [1, 2, 4, 8, 16, 32];
-const VISUAL_BARS = 40;
-const VISUALIZER_VARIANTS = ["eqBars", "beatPulse", "skyline", "ruler", "shimmer"];
 const LANE_VARIANTS = ["compact", "dense", "performance"];
 const LAYOUT_VARIANTS = ["classic3col", "studioDominant", "performance"];
 const STATE_PRESETS = ["live", "ready", "playing", "generating", "error"];
@@ -82,7 +80,6 @@ const DEFAULT_ADD_TRACK = {
   sound: "pluck",
 };
 const DEFAULT_PREVIEW_SETTINGS = {
-  visualizerVariant: "eqBars",
   laneVariant: "compact",
   layoutVariant: "classic3col",
   statePreset: "live",
@@ -142,11 +139,11 @@ function eventLabel(event) {
 }
 
 function statusFromMusicState(musicState, song) {
-  if (musicState.generationState === "generating") return { label: "Генерация", kind: "loading" };
+  if (musicState.generationState === "generating") return { label: "Нарезаю…", kind: "loading" };
   if (musicState.error) return { label: "Ошибка", kind: "error" };
-  if (musicState.playback.isPlaying) return { label: "Играет", kind: "playing" };
-  if (song) return { label: "Готово", kind: "ready" };
-  return { label: "Пусто", kind: "empty" };
+  if (musicState.playback.isPlaying) return { label: "Крутится", kind: "playing" };
+  if (song) return { label: "Пласт готов", kind: "ready" };
+  return { label: "Нет пластинки", kind: "empty" };
 }
 
 function randomMeterMap(song) {
@@ -160,7 +157,7 @@ function isInteractiveTarget(target) {
 
 export default function App() {
   const [messages, setMessages] = useState([
-    makeMessage("assistant", "Опиши трек или открой библиотеку (♫), чтобы загрузить готовый."),
+    makeMessage("assistant", "Поставь пластинку — опиши трек или открой библиотеку (♫), чтобы загрузить готовый."),
   ]);
   const [input, setInput] = useState("");
   const [song, setSong] = useState(null);
@@ -197,6 +194,8 @@ export default function App() {
   const [previewSettings, setPreviewSettings] = useState(DEFAULT_PREVIEW_SETTINGS);
   const [mockMeterLevels, setMockMeterLevels] = useState({});
   const [designLabOpen, setDesignLabOpen] = useState(false);
+  const [loadNonce, setLoadNonce] = useState(0); // bumps on each fresh song load -> replays the record-drop
+  const [errorPulse, setErrorPulse] = useState(0); // bumps on each error -> triggers the needle-skip shake
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -209,6 +208,7 @@ export default function App() {
   const usesMockSignals = previewEnabled && previewSettings.statePreset !== "live" && !playing;
   const mood = songMood(song);
   const draftSounds = soundsForInstrument(catalog, trackDraft.instrument);
+  const getWaveform = useCallback(() => playerRef.current?.getWaveform?.() ?? null, []);
   const realErrorState = lastError
     ? {
         scope: "backend",
@@ -354,6 +354,11 @@ export default function App() {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
+  // A fresh error nudges the turntable into a one-shot "needle skip" shake.
+  useEffect(() => {
+    if (lastError) setErrorPulse((value) => value + 1);
+  }, [lastError]);
+
   useEffect(() => {
     if (!previewEnabled || !previewSettings.mockAutoPlay || previewSettings.statePreset === "live") return undefined;
     const intervalMs = Math.max(80, (60000 / musicUiState.playback.bpm) / 4);
@@ -471,7 +476,10 @@ export default function App() {
   async function loadSong(nextSong, message, { resetStep = true } = {}) {
     const normalized = normalizeSongForLoop(copySong(nextSong));
     setSong(normalized);
-    if (resetStep) setStep(0);
+    if (resetStep) {
+      setStep(0);
+      setLoadNonce((value) => value + 1); // fresh pressing -> drop it on the platter
+    }
     await playerRef.current.load(normalized);
     if (message) {
       setMessages((current) => [...current, makeMessage("assistant", message)]);
@@ -501,7 +509,7 @@ export default function App() {
     setBusy(true);
     try {
       const { song: next, message } = await compose(prompt, song);
-      await loadSong(next, message || "Готово. Song JSON обновлён.");
+      await loadSong(next, message || "Свежий пласт нарезан — Song JSON обновлён.");
       setLastError("");
     } catch (error) {
       const message = friendlyError(error);
@@ -587,9 +595,9 @@ export default function App() {
     setImportState("success");
     try {
       if (!prefersReducedMotion()) await delay(200); // let the success flash paint
-      await loadSong(result.song, "Импортировал трек. Можно нажимать Play.");
+      await loadSong(result.song, "Пластинка в коллекции — жми Play.");
       setLastError("");
-      showToast(result.warnings?.[0] ?? "Импортировано");
+      showToast(result.warnings?.[0] ?? "Пласт добавлен");
       closeImport();
     } catch (error) {
       setImportError(friendlyError(error));
@@ -859,12 +867,6 @@ export default function App() {
             >
               ♫
             </button>
-            <button className={`icon-button play ${musicUiState.playback.isPlaying ? "is-on" : ""}`} type="button" onClick={play} disabled={!song || busy || musicUiState.playback.isPlaying} title="Play">
-              ▶
-            </button>
-            <button className="icon-button stop" type="button" onClick={stop} disabled={!song || (!playing && !musicUiState.playback.isPlaying)} title="Stop">
-              ■
-            </button>
           </div>
         </header>
 
@@ -894,7 +896,15 @@ export default function App() {
           <MetaCard label="Step" value={song ? `${musicUiState.playback.currentStep + 1}/${totalSteps}` : "-"} />
         </div>
 
-        <LiveVisualizer musicState={musicUiState} variant={previewEnabled ? previewSettings.visualizerVariant : "eqBars"} />
+        <LiveVisualizer
+          musicState={musicUiState}
+          song={song}
+          getWaveform={getWaveform}
+          onPlay={play}
+          onStop={stop}
+          loadNonce={loadNonce}
+          errorPulse={errorPulse}
+        />
 
         <section className={`track-grid lane-variant-${previewEnabled ? previewSettings.laneVariant : "compact"}`} aria-label="Дорожки">
           <div className="track-toolbar">
@@ -1009,7 +1019,7 @@ export default function App() {
           ))}
           {!song && (
             <div className="empty-state">
-              <h3>Начни с промпта или библиотеки</h3>
+              <h3>Поставь первую пластинку</h3>
               <p>Опиши трек в чате или открой библиотеку (♫) в панели транспорта и выбери готовый.</p>
             </div>
           )}
@@ -1309,16 +1319,6 @@ function PreviewControls({ settings, musicState, onChange, onRandomizeMeters, on
         </div>
         <div className="preview-controls">
           <label>
-            <span>Visualizer</span>
-            <select value={settings.visualizerVariant} onChange={(event) => update("visualizerVariant", event.target.value)}>
-              {VISUALIZER_VARIANTS.map((variant) => (
-                <option value={variant} key={variant}>
-                  {optionLabel(variant)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
             <span>Lane</span>
             <select value={settings.laneVariant} onChange={(event) => update("laneVariant", event.target.value)}>
               {LANE_VARIANTS.map((variant) => (
@@ -1459,60 +1459,175 @@ function BpmControl({ value, disabled, onDec, onInc, onCommit }) {
   );
 }
 
-function visualizerBars(musicState) {
-  const energy = Math.min(1, musicState.tracks.reduce((sum, track) => sum + track.meterLevel, 0));
-  return Array.from({ length: VISUAL_BARS }, (_, index) => {
-    const phase = Math.sin((index + 1) * 1.73 + musicState.playback.currentStep * 0.51);
-    const centerBias = 1 - Math.abs(index - VISUAL_BARS / 2) / (VISUAL_BARS / 2) * 0.36;
-    const idle = 8 + Math.abs(phase) * 8;
-    const active = musicState.playback.isPlaying ? 18 + (Math.abs(phase) * 42 + energy * 38) * centerBias : idle;
-    const generating = musicState.generationState === "generating" ? 26 + Math.abs(Math.sin(index * 0.64)) * 42 : active;
-    return Math.min(96, generating);
-  });
+// Map an FFT magnitude array (dB) to `cols` normalized column levels (0..1),
+// with a log-ish frequency spread and dB scaling so a loud master doesn't pin
+// every column at the top.
+function spectrumColumns(data, cols) {
+  const out = new Float32Array(cols);
+  if (!data || !data.length) return out;
+  const usable = Math.max(4, Math.floor(data.length * 0.72)); // drop the near-silent top octave
+  for (let c = 0; c < cols; c++) {
+    const i0 = Math.floor(Math.pow(c / cols, 1.7) * usable);
+    const i1 = Math.max(i0 + 1, Math.floor(Math.pow((c + 1) / cols, 1.7) * usable));
+    let peak = -Infinity;
+    for (let i = i0; i < i1 && i < data.length; i++) if (data[i] > peak) peak = data[i];
+    out[c] = Math.max(0, Math.min(1, (peak + 70) / 55)); // dB (~-70..-15) -> 0..1
+  }
+  return out;
 }
 
-function LiveVisualizer({ musicState, variant }) {
-  const bars = visualizerBars(musicState);
+// Mirrored segmented VU meter: one spectrum drawn symmetrically on both sides of
+// the record — bass at the outer edges, tapering toward the centre. lime body,
+// amber tips. Fast attack, slow release.
+function drawWaveform(ctx, canvas, data, smooth) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const cols = smooth.length; // columns per side
+  const target = spectrumColumns(data, cols);
+  for (let i = 0; i < cols; i++) {
+    const t = target[i];
+    smooth[i] += (t - smooth[i]) * (t > smooth[i] ? 0.5 : 0.14); // fast attack, slow release
+  }
+
+  const mid = h / 2;
+  const rows = 8;
+  const gap = 3;
+  const colW = (w / 2 - gap * cols) / cols; // per half; k=0 (bass) sits at the outer edge
+  const ch = (h * 0.46) / rows;
+  const sh = Math.max(2, ch - 2);
+  const seg = (x, y) => {
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(x, y, colW, sh, 1.5);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, colW, sh);
+    }
+  };
+  const column = (level, x) => {
+    const lit = Math.round(Math.min(1, level) * rows);
+    for (let r = 0; r < rows; r++) {
+      if (r < lit) {
+        const a = 0.5 + (r / rows) * 0.45;
+        ctx.fillStyle = r >= rows - 2 ? `rgba(255, 200, 87, ${a})` : `rgba(183, 255, 90, ${a})`; // amber tips, lime body
+      } else {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.05)"; // faint unlit track
+      }
+      seg(x, mid - (r + 1) * ch + 1);
+      seg(x, mid + r * ch + 1);
+    }
+  };
+  for (let k = 0; k < cols; k++) {
+    const level = smooth[k]; // k=0 = bass -> outer edge, high k -> toward the record
+    column(level, k * (colW + gap)); // left half
+    column(level, w - colW - k * (colW + gap)); // right half (mirror)
+  }
+}
+
+// Vinyl turntable — the studio's live visualizer. Reads playback + meters from
+// musicState; the record spins at tempo with a tonearm tracking the loop, and
+// the mirrored VU meter is driven by the player's real master-output spectrum.
+function LiveVisualizer({ musicState, song, getWaveform, onPlay, onStop, loadNonce, errorPulse }) {
+  const [skip, setSkip] = useState(false);
+  const canvasRef = useRef(null);
+  const smoothRef = useRef(new Float32Array(28)); // eased per-column amplitudes (per side)
+
+  const isGenerating = musicState.generationState === "generating";
+  const isPlaying = musicState.playback.isPlaying;
+  const bpm = musicState.playback.bpm;
+  const step = musicState.playback.currentStep;
+  const totalSteps = musicState.playback.totalSteps;
+  const energy = Math.min(1, musicState.tracks.reduce((sum, track) => sum + track.meterLevel, 0));
   const activeTracks = musicState.tracks
     .filter((track) => track.meterLevel > 0.02)
-    .map((track) => ({ ...track, label: ROLE_LABELS[track.role] ?? track.trackId }));
-  const isGenerating = musicState.generationState === "generating";
-  const isError = Boolean(musicState.error);
-  const isPlaying = musicState.playback.isPlaying;
-  const beatIndex = musicState.playback.currentStep % musicState.playback.stepsPerBar;
+    .map((track) => ({ id: track.trackId, label: ROLE_LABELS[track.role] ?? track.trackId }));
+  const canPlay = Boolean(song) && !isGenerating && !isPlaying;
+
+  // One-shot "needle skip" whenever a new error arrives.
+  useEffect(() => {
+    if (!errorPulse) return undefined;
+    setSkip(true);
+    const timer = window.setTimeout(() => setSkip(false), 440);
+    return () => window.clearTimeout(timer);
+  }, [errorPulse]);
+
+  // Live VU meter driven by the player's master-output spectrum.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext("2d");
+    const reduce = prefersReducedMotion();
+    if (!isPlaying) smoothRef.current.fill(0); // settle to an empty meter
+    let raf = 0;
+    const loop = () => {
+      drawWaveform(ctx, canvas, isPlaying ? getWaveform() : null, smoothRef.current);
+      if (isPlaying && !reduce) raf = window.requestAnimationFrame(loop);
+    };
+    loop();
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [isPlaying, getWaveform]);
+
+  const rev = Math.max(0.8, 120 / (bpm || 90)); // seconds per revolution (~2 beats)
+  const progress = totalSteps > 1 ? step / (totalSteps - 1) : 0;
+  const armAngle = isPlaying ? 15 + progress * 6 : isGenerating ? 13 : 8;
+  const stateLabel = isGenerating ? "Нарезаю пласт" : isPlaying ? "Игла на дорожке" : song ? "Вертушка готова" : "Пустой шпиндель";
 
   return (
-    <section className={`visualizer variant-${variant} ${isGenerating ? "is-generating" : ""} ${isPlaying ? "is-playing" : ""} ${isError ? "is-error" : ""}`} aria-label="Live output">
+    <section
+      className={`visualizer turntable ${isGenerating ? "is-generating" : ""} ${isPlaying ? "is-playing" : ""} ${song ? "has-record" : "is-empty"} ${skip ? "is-skip" : ""}`}
+      style={{ "--rev": `${rev}s`, "--arm-angle": `${armAngle}deg`, "--platter-energy": energy }}
+      aria-label="Live output"
+    >
       <header>
         <div>
           <p className="eyebrow">Live output</p>
-          <h3>{isGenerating ? "Генерация" : isPlaying ? "Играет" : isError ? "Ошибка" : "Ready"}</h3>
+          <h3>{stateLabel}</h3>
         </div>
         <div className="active-track-list" aria-label="Активные дорожки">
-          {activeTracks.length ? activeTracks.slice(0, 4).map((track) => <span key={track.trackId}>{track.label}</span>) : <span>idle</span>}
+          {activeTracks.length ? activeTracks.slice(0, 4).map((track) => <span key={track.id}>{track.label}</span>) : <span>idle</span>}
         </div>
       </header>
-      {variant === "beatPulse" && (
-        <div className="beat-pulse-grid" aria-hidden="true">
-          {Array.from({ length: musicState.playback.stepsPerBar }).map((_, index) => (
-            <i className={index === beatIndex ? "is-current" : ""} key={index} style={{ "--cell-level": `${bars[index % bars.length]}%` }} />
-          ))}
+      <div className="deck">
+        <canvas className="waveform" ref={canvasRef} aria-hidden="true" />
+        <div className="deck-stage" aria-hidden="true">
+          <span className="deck-glow" />
+          <div className="platter" key={loadNonce}>
+            <div className="record">
+              <span className="record-sheen" />
+              <div className="record-label">
+                <span className="record-title">{song?.title ?? "PromptBeats"}</span>
+                <span className="record-bpm">{song ? `${song.bpm} BPM` : "—"}</span>
+              </div>
+            </div>
+            <span className="beat-ring" />
+            <span className="record-spindle" />
+          </div>
+          <div className="tonearm">
+            <span className="tonearm-pivot" />
+            <span className="tonearm-rod" />
+            <span className="tonearm-head" />
+          </div>
         </div>
-      )}
-      {variant === "ruler" && (
-        <div className="visual-ruler" aria-hidden="true">
-          {Array.from({ length: musicState.playback.stepsPerBar }).map((_, index) => (
-            <i className={`${index % 4 === 0 ? "is-beat" : ""} ${index === beatIndex ? "is-current" : ""}`} key={index} />
-          ))}
+        <div className="deck-controls">
+          <button className={`deck-btn play ${isPlaying ? "is-on" : ""}`} type="button" onClick={onPlay} disabled={!canPlay} title="Play" aria-label="Play">
+            ▶
+          </button>
+          <button className="deck-btn stop" type="button" onClick={onStop} disabled={!isPlaying} title="Stop" aria-label="Stop">
+            ■
+          </button>
         </div>
-      )}
-      {variant !== "beatPulse" && variant !== "ruler" && (
-        <div className={`eq-bars ${variant === "skyline" ? "is-skyline" : ""} ${variant === "shimmer" ? "is-shimmer" : ""}`} aria-hidden="true">
-          {bars.map((height, index) => (
-            <i key={index} style={{ "--bar-height": `${height}%`, "--bar-delay": `${index * 18}ms` }} />
-          ))}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
