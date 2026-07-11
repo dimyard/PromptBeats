@@ -57,11 +57,23 @@ console.assert(errors.some(({ code }) => code === "unknown_sound"));
 console.assert(errors.some(({ code }) => code === "event_out_of_range"));
 ```
 
-Run the following one line at a time. `step` values should advance within
-`0..15`; `stop()` should reset the position and emit step `0`.
+Run the following one line at a time. The edit simulates A's manual controls:
+it changes BPM, mutes drums, lowers bass gain, and reloads the complete Song.
+Playback should remain active after the reload. `stop()` should reset the
+position, emit step `0`, and silence any active tail immediately.
 
 ```js
 await player.play();
+await player.load({
+  ...song,
+  bpm: 90,
+  tracks: song.tracks.map((track) => (
+    track.id === "drums"
+      ? { ...track, muted: true }
+      : { ...track, gain: 0.35 }
+  )),
+});
+console.assert(player.isPlaying());
 player.isPlaying();
 player.stop();
 player.isPlaying();
@@ -74,4 +86,5 @@ Expected results:
 - Both assertions pass without a thrown error.
 - The player reports `unknown_sound` and `event_out_of_range`, but remains usable.
 - `isPlaying()` is `true` after `play()` and `false` after `stop()`.
+- BPM, mute, and gain from the reloaded Song JSON take effect without adding Player methods.
 - `steps.at(-1)` is `0` after `stop()`.

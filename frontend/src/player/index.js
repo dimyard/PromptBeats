@@ -16,13 +16,15 @@ const DEFAULT_BPM = 120;
 const DEFAULT_BARS = 1;
 const DEFAULT_GAIN = 0.8;
 const STOP_FADE_SECONDS = 0.005;
+const MAX_BPM = 220;
+const MAX_BARS = 32;
 
 const numberInRange = (value, fallback, min, max) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 };
 
-const safeSteps = (bars) => Math.max(16, Math.floor(numberInRange(bars, DEFAULT_BARS, 1, 64)) * 16);
+const safeSteps = (bars) => Math.max(16, Math.floor(numberInRange(bars, DEFAULT_BARS, 1, MAX_BARS)) * 16);
 
 export function createPlayer() {
   let parts = [];
@@ -60,7 +62,7 @@ export function createPlayer() {
       Tone.Transport.stop();
       teardown();
 
-      Tone.Transport.bpm.value = numberInRange(song?.bpm, DEFAULT_BPM, 40, 240);
+      Tone.Transport.bpm.value = numberInRange(song?.bpm, DEFAULT_BPM, 40, MAX_BPM);
       totalSteps = safeSteps(song?.bars);
       Tone.Transport.loop = true;
       Tone.Transport.loopStart = 0;
