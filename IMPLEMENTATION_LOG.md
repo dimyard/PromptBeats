@@ -20,6 +20,7 @@
 | Грид дорожек + ручные контролы | A | ✅ stage 3 demo-ready | Song JSON → `player.load(song)` | `frontend/src/App.jsx`, `frontend/src/songEditing.js` |
 | Импорт/экспорт проекта | A | ✅ готов | `song-io.js` (serialize/parse/validate) + UI overlay | `frontend/src/song-io.js`, `App.jsx` |
 | Экспорт WAV (растяжка) | C | ✅ готов | `player.exportWav(song?)` | `frontend/src/player/` |
+| Общая библиотека треков | A+B | ✅ готов | `GET/POST /api/library`, `GET /api/library/:id` (Контракт 5) | `backend/src/library.js`, `frontend/src/library-api.js`, `App.jsx` |
 
 Легенда: ⬜ не начат · 🟡 в работе · ✅ готов · ⚠️ есть отклонение/баг (см. запись).
 
@@ -39,6 +40,31 @@
 ---
 
 ## Записи
+
+### 2026-07-11 · Feat: общая библиотека треков (Контракт 5) · A+B
+- **Что сделано:** серверная общая библиотека Song JSON. Бэк: файловое хранилище + 3 эндпоинта
+  (`GET /api/library`, `GET /api/library/:id`, `POST /api/library`) с дедупом по canonical-JSON и
+  перезаписью по имени; при старте бэк **сидит** демо-трек из `sample-song.json` (идемпотентно, через
+  дедуп). Фронт: HTTP-клиент + выезжающая панель (drawer) справа — сохранение текущего трека и список
+  готовых. Открывается кнопкой `♫` в транспорте студии. Клик по `▶` на карточке загружает трек,
+  закрывает панель и запускает воспроизведение (отдельной кнопки «Загрузить» нет). Старая кнопка
+  «Пример» удалена — демо теперь живёт в библиотеке.
+- **Где:** `backend/src/library.js` (стор+логика), `backend/src/server.js` (роуты),
+  `backend/test/library.test.mjs` (10 тестов), `frontend/src/library-api.js`, `frontend/src/App.jsx`
+  (компонент `LibraryDrawer` + обработчики), `frontend/src/styles.css`. Данные — `backend/data/library.json`
+  (gitignored, переопределяется `LIBRARY_FILE`).
+- **Публичный интерфейс:**
+  - Бэк: `GET /api/library` → `{ tracks: <meta>[] }`; `GET /api/library/:id` → `{ track: {…, song} }` / 404;
+    `POST /api/library` `{ song, title?, overwrite? }` → `{ status: created|duplicate|title_conflict|updated, track }`.
+  - Модуль: `createLibraryStore({ filePath, clock?, genId? })` → `{ list(), get(id), save({song,title,overwrite}) }`.
+  - Фронт: `listLibrary()`, `getLibraryTrack(id)`, `saveToLibrary({song,title,overwrite})` из `library-api.js`.
+- **Как использовать:** `curl -X POST localhost:3001/api/library -H 'Content-Type: application/json'
+  -d '{"song": <SongJSON>}'` → `{"status":"created", ...}`. В UI: кнопка `♫` → ввести имя → «Сохранить»;
+  клик `▶` на карточке — грузит трек в студию, сворачивает панель и играет.
+- **Отклонения от контракта:** нет. Аддитивное расширение — добавлен **Контракт 5** в `CONTRACTS.md`
+  (Song JSON / `/api/compose` / Player не менялись, `song.schema.json` не тронут, `version` = 1).
+- **Известные баги / TODO:** нет удаления треков (по решению); хранилище — один файл (для демо достаточно,
+  для нагрузки нужна БД); нет аутентификации/авторства.
 
 ### 2026-07-11 · Live mixer и стабильный playhead · C
 - **Что сделано:** ручные изменения только BPM/gain/mute теперь обновляют существующие gain-ноды без пересборки

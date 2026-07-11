@@ -2,6 +2,7 @@
 // Stage 3: manual Song JSON controls, track lanes, inspector, and beat-reactive visuals.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { compose, getCatalog } from "./api.js";
+import { listLibrary, getLibraryTrack, saveToLibrary } from "./library-api.js";
 import { createPlayer } from "./player/index.js";
 import {
   addTrack,
@@ -26,7 +27,6 @@ import {
   downloadBlob,
   readFileAsText,
 } from "./song-io.js";
-import sampleSong from "../../sample-song.json";
 import "./styles.css";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,7 +68,7 @@ function makeMessage(role, text) {
 function friendlyError(error) {
   const message = error?.message ?? String(error);
   if (message === "Failed to fetch") {
-    return "Бэкенд недоступен. Можно продолжить через кнопку «Пример».";
+    return "Бэкенд недоступен. Запусти сервер и попробуй снова.";
   }
   return message;
 }
@@ -89,6 +89,17 @@ function songMood(song) {
   return "lofi";
 }
 
+function formatSavedAt(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function eventsAtStep(track, step) {
   return (track.events ?? []).filter((event) => event.step === step);
 }
@@ -99,7 +110,7 @@ function eventLabel(event) {
 
 export default function App() {
   const [messages, setMessages] = useState([
-    makeMessage("assistant", "Опиши трек или нажми «Пример», чтобы загрузить демо без бэкенда."),
+    makeMessage("assistant", "Опиши трек или открой библиотеку (♫), чтобы загрузить готовый."),
   ]);
   const [input, setInput] = useState("");
   const [song, setSong] = useState(null);
@@ -121,6 +132,15 @@ export default function App() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [draggedTrackId, setDraggedTrackId] = useState("");
   const [dropTargetTrackId, setDropTargetTrackId] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryTracks, setLibraryTracks] = useState([]);
+  const [libraryState, setLibraryState] = useState("idle"); // idle|loading|error
+  const [libraryError, setLibraryError] = useState("");
+  const [saveName, setSaveName] = useState("");
+  const [saveState, setSaveState] = useState("idle"); // idle|saving
+  const [pendingConflict, setPendingConflict] = useState(null); // { track } awaiting overwrite confirm
+  const [duplicateOf, setDuplicateOf] = useState(null); // id of an existing track a save matched
+  const [loadingId, setLoadingId] = useState(null); // library track currently loading
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -298,6 +318,16 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [importOpen]);
 
+  // Esc closes the library drawer.
+  useEffect(() => {
+    if (!libraryOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") closeLibrary();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [libraryOpen]);
+
   function showToast(message) {
     setToast(message);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -320,20 +350,6 @@ export default function App() {
       const nextSong = updater(song);
       await loadSong(nextSong, null, { resetStep: false });
       if (successMessage) showToast(successMessage);
-    } catch (error) {
-      const message = friendlyError(error);
-      setLastError(message);
-      setMessages((current) => [...current, makeMessage("error", message)]);
-      showToast(message);
-    }
-  }
-
-  async function loadExample() {
-    if (busy) return;
-    try {
-      await loadSong(sampleSong, "Загрузил демо-трек из sample-song.json. Можно нажимать Play.");
-      setLastError("");
-      showToast("Пример загружен");
     } catch (error) {
       const message = friendlyError(error);
       setLastError(message);
@@ -508,6 +524,95 @@ export default function App() {
     }
   }
 
+  // --- Shared library -------------------------------------------------------
+
+  function openLibrary() {
+    setSaveName(song?.title ?? "");
+    setPendingConflict(null);
+    setDuplicateOf(null);
+    setLibraryOpen(true);
+    refreshLibrary();
+  }
+
+  function closeLibrary() {
+    setLibraryOpen(false);
+    setPendingConflict(null);
+    setDuplicateOf(null);
+  }
+
+  async function refreshLibrary() {
+    setLibraryState("loading");
+    setLibraryError("");
+    try {
+      const { tracks } = await listLibrary();
+      setLibraryTracks(tracks);
+      setLibraryState("idle");
+    } catch (error) {
+      setLibraryError(friendlyError(error));
+      setLibraryState("error");
+    }
+  }
+
+  // Save the current song. Backend replies with a status:
+  //   created | updated -> saved, refresh list
+  //   duplicate         -> identical track already there, highlight it
+  //   title_conflict    -> same name, different content -> ask to overwrite
+  async function saveCurrent(overwrite = false) {
+    if (!song || saveState === "saving") return;
+    const name = saveName.trim();
+    if (!name) return;
+    setSaveState("saving");
+    setDuplicateOf(null);
+    try {
+      const { status, track } = await saveToLibrary({
+        song: { ...song, title: name },
+        title: name,
+        overwrite,
+      });
+      if (status === "title_conflict") {
+        setPendingConflict({ track });
+      } else if (status === "duplicate") {
+        setPendingConflict(null);
+        setDuplicateOf(track.id);
+        showToast(`Такой трек уже есть: «${track.title}»`);
+        await refreshLibrary();
+        setDuplicateOf(track.id);
+      } else {
+        setPendingConflict(null);
+        showToast(status === "updated" ? "Трек обновлён" : "Сохранено в библиотеку");
+        await refreshLibrary();
+      }
+    } catch (error) {
+      showToast(friendlyError(error));
+    } finally {
+      setSaveState("idle");
+    }
+  }
+
+  async function loadFromLibrary(id, { autoPlay = false } = {}) {
+    if (loadingId) return;
+    setLoadingId(id);
+    try {
+      const { track } = await getLibraryTrack(id);
+      await loadSong(track.song, `Загрузил «${track.title}» из библиотеки.`);
+      setLastError("");
+      showToast(`Загружено: «${track.title}»`);
+      if (autoPlay) {
+        // Graph is already loaded (loadSong awaited player.load); this click is
+        // the user gesture, so drive the player directly (avoids the stale
+        // `song` guard in play() on the very first load).
+        await playerRef.current.play();
+        setPlaying(true);
+      }
+    } catch (error) {
+      const message = friendlyError(error);
+      setLastError(message);
+      showToast(message);
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   return (
     <main
       className={`app-shell theme-${mood} ${leftCollapsed ? "is-left-collapsed" : ""} ${rightCollapsed ? "is-right-collapsed" : ""}`}
@@ -596,8 +701,14 @@ export default function App() {
           </div>
 
           <div className="transport-actions" aria-label="Transport">
-            <button className="icon-button secondary" type="button" onClick={loadExample} disabled={busy} title="Пример">
-              ◇
+            <button
+              className={`icon-button secondary ${libraryOpen ? "is-on" : ""}`}
+              type="button"
+              onClick={openLibrary}
+              title="Библиотека"
+              aria-label="Библиотека"
+            >
+              ♫
             </button>
             <button className={`icon-button play ${playing ? "is-on" : ""}`} type="button" onClick={play} disabled={!song || busy || playing} title="Play">
               ▶
@@ -734,8 +845,8 @@ export default function App() {
           ))}
           {!song && (
             <div className="empty-state">
-              <h3>Начни с промпта или примера</h3>
-              <p>Кнопка «Пример» загрузит локальный Song JSON, даже если бэкенд ещё не поднят.</p>
+              <h3>Начни с промпта или библиотеки</h3>
+              <p>Опиши трек в чате или открой библиотеку (♫) в панели транспорта и выбери готовый.</p>
             </div>
           )}
         </section>
@@ -753,6 +864,30 @@ export default function App() {
         collapsed={rightCollapsed}
         onToggle={() => setRightCollapsed((value) => !value)}
       />
+
+      {libraryOpen && (
+        <LibraryDrawer
+          song={song}
+          tracks={libraryTracks}
+          state={libraryState}
+          error={libraryError}
+          saveName={saveName}
+          saveState={saveState}
+          pendingConflict={pendingConflict}
+          duplicateOf={duplicateOf}
+          loadingId={loadingId}
+          onSaveNameChange={setSaveName}
+          onSave={() => saveCurrent(false)}
+          onConfirmOverwrite={() => saveCurrent(true)}
+          onCancelOverwrite={() => setPendingConflict(null)}
+          onPlay={(id) => {
+            closeLibrary();
+            loadFromLibrary(id, { autoPlay: true });
+          }}
+          onRefresh={refreshLibrary}
+          onClose={closeLibrary}
+        />
+      )}
 
       {importOpen && (
         <div
@@ -817,6 +952,154 @@ export default function App() {
 
       {toast && <div className="toast">{toast}</div>}
     </main>
+  );
+}
+
+function LibraryDrawer({
+  song,
+  tracks,
+  state,
+  error,
+  saveName,
+  saveState,
+  pendingConflict,
+  duplicateOf,
+  loadingId,
+  onSaveNameChange,
+  onSave,
+  onConfirmOverwrite,
+  onCancelOverwrite,
+  onPlay,
+  onRefresh,
+  onClose,
+}) {
+  const saving = saveState === "saving";
+  const canSave = Boolean(song) && Boolean(saveName.trim()) && !saving;
+
+  return (
+    <div className="library-overlay" onClick={onClose} role="presentation">
+      <aside
+        className="library-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Библиотека треков"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="library-head">
+          <div className="sidebar-title">
+            <p className="eyebrow">Shared</p>
+            <h3>Библиотека</h3>
+          </div>
+          <button className="import-close" type="button" onClick={onClose} aria-label="Закрыть">
+            ✕
+          </button>
+        </header>
+
+        <section className="library-save" aria-label="Сохранить текущий трек">
+          <p className="eyebrow">Сохранить текущий</p>
+          {song ? (
+            <>
+              <form
+                className="library-save-row"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onSave();
+                }}
+              >
+                <input
+                  value={saveName}
+                  onChange={(event) => onSaveNameChange(event.target.value)}
+                  placeholder="Название трека"
+                  disabled={saving}
+                  aria-label="Название трека"
+                />
+                <button className="library-save-btn" type="submit" disabled={!canSave}>
+                  {saving ? "…" : "Сохранить"}
+                </button>
+              </form>
+              {pendingConflict && (
+                <div className="library-conflict" role="alert">
+                  <p>
+                    Трек «{pendingConflict.track.title}» уже есть. Перезаписать?
+                  </p>
+                  <div className="library-conflict-actions">
+                    <button type="button" className="library-overwrite" onClick={onConfirmOverwrite} disabled={saving}>
+                      Перезаписать
+                    </button>
+                    <button type="button" className="library-cancel" onClick={onCancelOverwrite} disabled={saving}>
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="library-hint">Загрузи или сгенерируй трек, чтобы сохранить его.</p>
+          )}
+        </section>
+
+        <section className="library-list" aria-label="Треки в библиотеке">
+          <div className="library-list-head">
+            <p className="eyebrow">Треки{tracks.length ? ` · ${tracks.length}` : ""}</p>
+            <button
+              className="library-refresh"
+              type="button"
+              onClick={onRefresh}
+              disabled={state === "loading"}
+              title="Обновить"
+              aria-label="Обновить"
+            >
+              ↻
+            </button>
+          </div>
+
+          {state === "loading" && <p className="library-hint">Загрузка…</p>}
+          {state === "error" && (
+            <div className="library-error-box">
+              <p className="import-error">{error}</p>
+              <button type="button" className="library-cancel" onClick={onRefresh}>
+                Повторить
+              </button>
+            </div>
+          )}
+          {state === "idle" && tracks.length === 0 && (
+            <p className="library-hint">Библиотека пуста — сохрани первый трек.</p>
+          )}
+
+          {state === "idle" &&
+            tracks.map((track) => {
+              const summary = track.summary ?? {};
+              const isLoading = loadingId === track.id;
+              return (
+                <article
+                  className={`library-card ${duplicateOf === track.id ? "is-duplicate" : ""}`}
+                  key={track.id}
+                >
+                  <div className="library-card-main">
+                    <strong>{track.title || "без названия"}</strong>
+                    <span className="library-card-meta">
+                      {summary.bpm} BPM · {summary.bars} bars · {summary.key || "—"} · {summary.tracks} дор.
+                    </span>
+                    <span className="library-card-date">{formatSavedAt(track.updatedAt)}</span>
+                  </div>
+                  <div className="library-card-actions">
+                    <button
+                      type="button"
+                      className="library-play"
+                      onClick={() => onPlay(track.id)}
+                      disabled={Boolean(loadingId)}
+                      title="Загрузить и играть"
+                      aria-label={`Загрузить и играть «${track.title || "без названия"}»`}
+                    >
+                      {isLoading ? "…" : "▶"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+        </section>
+      </aside>
+    </div>
   );
 }
 

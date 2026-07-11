@@ -296,6 +296,72 @@ Textarea-вставка, выбор файла и drag-n-drop (файл **или
 
 ---
 
+## Контракт 5 — Общая библиотека треков (A ↔ B)
+
+**Аддитивно** (как health-endpoint в Контракте 2): форма Song JSON, `/api/compose` и Player-интерфейс
+**не меняются**, `song.schema.json` не трогаем, `version` остаётся `1`. Добавляются три новых эндпоинта.
+Библиотека **общая**: все клиенты одного бэкенда видят одну коллекцию (файловое хранилище на сервере).
+Конверт ошибок тот же, что у `/api/compose`: `{ error: { code, message } }`.
+
+Хранимая запись (внутренняя форма; наружу целиком не отдаётся списком):
+```jsonc
+{
+  "id": "lib_…",                 // серверный уникальный id
+  "title": "lofi sketch",         // = song.title (или переданного title)
+  "createdAt": "2026-07-11T…Z",   // ISO
+  "updatedAt": "2026-07-11T…Z",
+  "song": { /* полный валидный Song JSON v1 */ }
+}
+```
+`<meta>` ниже = запись без `song`, плюс `summary`:
+```jsonc
+{ "id","title","createdAt","updatedAt", "summary": { "bpm","bars","key","tracks": <кол-во дорожек> } }
+```
+
+### `GET /api/library` — список (лёгкий, без `song`)
+```jsonc
+{ "tracks": [ <meta>, … ] }   // сортировка по updatedAt, свежие сверху
+```
+
+### `GET /api/library/:id` — один трек (с полным `song`)
+```jsonc
+{ "track": { "id","title","createdAt","updatedAt", "song": { /* Song JSON */ } } }
+```
+Нет id → `404 { "error": { "code": "not_found", "message": "…" } }`.
+
+### `POST /api/library` — сохранить
+Request body:
+```jsonc
+{ "song": { /* Song JSON */ }, "title": "необяз.", "overwrite": false }
+```
+`song` обязателен; валидируется через `normalizeSong` + `validateSong` (как ответ LLM) и лимит
+`MAX_SONG_CHARS` — иначе `400 bad_request`. Перед дедупом эффективное имя `title ?? song.title`
+пишется в `song.title` (запись самосогласована).
+
+Response `200` со штатным `status` (не ошибки):
+
+| status | когда | тело |
+|--------|-------|------|
+| `created` | нового такого нет | `{ status, track: <meta> }` |
+| `duplicate` | идентичный `song` (canonical JSON) уже есть | `{ status, track: <meta существующего> }` — **новая запись не создаётся** |
+| `title_conflict` | то же `title`, другой контент, `overwrite` не задан | `{ status, track: <meta существующего> }` — **не сохраняем** |
+| `updated` | то же `title` + `overwrite:true` | `{ status, track: <meta> }` |
+
+**Дедуп** — по канонической сериализации всего `song` (рекурсивная сортировка ключей объектов;
+порядок массивов значим). Живёт на бэке (единый источник правды для общей библиотеки).
+
+**Хранилище (B):** файл `backend/data/library.json` (переопределяется `LIBRARY_FILE`),
+gitignored runtime-состояние. Запись атомарна (temp + rename), апдейты сериализованы.
+При старте бэк идемпотентно сидит демо-трек из корневого `sample-song.json` (через `save`, дедуп
+не даёт дублей на рестартах), чтобы свежая библиотека не была пустой.
+Модуль `backend/src/library.js` — чистая логика (`createLibraryStore({ filePath, clock?, genId? })`
+→ `{ list, get, save }`), покрыта `backend/test/library.test.mjs`.
+
+**Фронт (A):** `frontend/src/library-api.js` (`listLibrary`, `getLibraryTrack`, `saveToLibrary`) +
+выезжающая панель (drawer) справа с сохранением текущего трека и списком для загрузки/воспроизведения.
+
+---
+
 ## Общий стек по умолчанию (можно переголосовать в первые 30 минут)
 - Язык: TypeScript/JavaScript и на фронте, и на бэке.
 - Фронт: React + Tone.js. Бэк: Node + Express (или Fastify).
