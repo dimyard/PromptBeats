@@ -379,6 +379,7 @@ summary:focus-visible {
 .studio-panel {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--mood) 14%, transparent), transparent 22rem),
@@ -433,6 +434,7 @@ summary:focus-visible {
 
 .control-strip {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
   padding: 0.9rem 1rem;
@@ -557,17 +559,19 @@ summary:focus-visible {
 
 .track-grid {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.55rem;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   padding: 0 1rem 1rem;
   scroll-behavior: smooth;
 }
 
 .track-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -638,8 +642,9 @@ summary:focus-visible {
 .track-row {
   --track-accent: var(--cyan);
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: minmax(15rem, 18rem) minmax(24rem, 1fr);
-  min-height: 4.2rem;
+  min-height: 5.85rem;
   border: 1px solid var(--line-soft);
   border-left: 2px solid var(--track-accent);
   border-radius: 0.55rem;
