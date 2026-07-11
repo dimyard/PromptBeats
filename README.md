@@ -10,23 +10,21 @@
 - `AGENTS.md` — правила для ИИ-агентов. `IMPLEMENTATION_LOG.md` — журнал реализаций.
 
 ## Быстрый старт
-```bash
-# терминал 1
-cd backend && npm install && cp .env.example .env && npm run dev     # :3001
-
-# терминал 2
-cd frontend && npm install && npm run dev                            # :5173
-```
-
-Если запускаете из старого Windows PowerShell, где `&&` не поддерживается:
 ```powershell
-# терминал 1
+npm run dev
+```
+Одна команда из корня проекта создаёт `backend/.env` из примера, если файла ещё нет, ставит зависимости
+в `backend/` и `frontend/` при первом запуске, затем поднимает backend на `:3001` и frontend на `:5173`.
+
+Если нужно запускать части отдельно:
+```powershell
 cd backend
 npm install
 Copy-Item .env.example .env
 npm run dev
+```
 
-# терминал 2
+```powershell
 cd frontend
 npm install
 npm run dev

@@ -1,0 +1,10 @@
+{
+  "name": "promptbeats",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PromptBeats dev launcher.",
+  "scripts": {
+    "dev": "node scripts/dev.js"
+  }
+}
