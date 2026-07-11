@@ -56,10 +56,10 @@ Desktop: один full-screen app shell с тремя зонами.
    - Большая центральная визуализация: waveform/equalizer/beat pulse.
    - Название текущего трека.
    - Track list с компактными lanes:
-     - Drums, `lofi_kit`, step grid на 16 шагов.
-     - Bass, `sine_bass`, note blocks.
-     - Pad, `soft_pad`, длинные note blocks.
-     - Lead, `pluck`, редкие note blocks.
+     - Drums, `lofi_kit`, step grid из `track.events`.
+     - Bass, `sine_bass`, note blocks из `track.events`.
+     - Pad, `soft_pad`, длинные note blocks из `track.events`.
+     - Lead, `pluck`, редкие note blocks из `track.events`.
    - Track controls: mute icon, solo icon, small level meter.
    - Moving playhead across the grid, если возможно.
 
@@ -89,7 +89,8 @@ Backend не нужен. Используй реалистичные mock states
 
 ## Sample Song JSON
 
-Используй эти данные для отрисовки:
+Используй эти данные для отрисовки. Важно: актуальный контракт использует единый массив `events` для всех дорожек.
+Не используй старые поля `pattern` и `notes`. Поле `role` обязательно.
 
 ```json
 {
@@ -97,51 +98,47 @@ Backend не нужен. Используй реалистичные mock states
   "title": "lofi sketch",
   "bpm": 75,
   "key": "A minor",
-  "bars": 8,
+  "bars": 2,
   "tracks": [
     {
       "id": "drums",
+      "role": "drums",
       "instrument": "sampler",
       "sound": "lofi_kit",
-      "pattern": [
+      "gain": 0.9,
+      "events": [
         { "step": 0, "note": "C2", "vel": 0.9 },
-        { "step": 4, "note": "D2", "vel": 0.6 },
-        { "step": 8, "note": "C2", "vel": 0.9 },
-        { "step": 12, "note": "D2", "vel": 0.55 },
-        { "step": 2, "note": "F#2", "vel": 0.35 },
-        { "step": 6, "note": "F#2", "vel": 0.3 },
-        { "step": 10, "note": "F#2", "vel": 0.35 },
-        { "step": 14, "note": "F#2", "vel": 0.3 }
+        { "step": 4, "note": "F#2", "vel": 0.5 },
+        { "step": 8, "note": "D2", "vel": 0.8 },
+        { "step": 12, "note": "F#2", "vel": 0.5 },
+        { "step": 16, "note": "C2", "vel": 0.9 },
+        { "step": 20, "note": "F#2", "vel": 0.5 },
+        { "step": 24, "note": "D2", "vel": 0.8 },
+        { "step": 28, "note": "F#2", "vel": 0.5 }
       ]
     },
     {
       "id": "bass",
+      "role": "bass",
       "instrument": "synth",
       "sound": "sine_bass",
-      "notes": [
-        { "start": 0, "dur": 2, "note": "A1", "vel": 0.8 },
-        { "start": 2, "dur": 2, "note": "F1", "vel": 0.78 },
-        { "start": 4, "dur": 2, "note": "D1", "vel": 0.72 },
-        { "start": 6, "dur": 2, "note": "E1", "vel": 0.76 }
+      "gain": 0.8,
+      "events": [
+        { "step": 0, "note": "A1", "dur": 8, "vel": 0.8 },
+        { "step": 8, "note": "A1", "dur": 8, "vel": 0.7 },
+        { "step": 16, "note": "F1", "dur": 8, "vel": 0.8 },
+        { "step": 24, "note": "G1", "dur": 8, "vel": 0.7 }
       ]
     },
     {
       "id": "pad",
+      "role": "pad",
       "instrument": "synth",
       "sound": "soft_pad",
-      "notes": [
-        { "start": 0, "dur": 4, "note": "A3", "vel": 0.45 },
-        { "start": 4, "dur": 4, "note": "F3", "vel": 0.42 }
-      ]
-    },
-    {
-      "id": "lead",
-      "instrument": "synth",
-      "sound": "pluck",
-      "notes": [
-        { "start": 1, "dur": 0.5, "note": "C4", "vel": 0.55 },
-        { "start": 2.5, "dur": 0.5, "note": "E4", "vel": 0.5 },
-        { "start": 5, "dur": 0.5, "note": "A4", "vel": 0.48 }
+      "gain": 0.6,
+      "events": [
+        { "step": 0, "note": "A3", "dur": 16, "vel": 0.5 },
+        { "step": 16, "note": "F3", "dur": 16, "vel": 0.5 }
       ]
     }
   ]
