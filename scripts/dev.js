@@ -6,19 +6,35 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const backendDir = path.join(rootDir, "backend");
 const frontendDir = path.join(rootDir, "frontend");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const isWindows = process.platform === "win32";
+const npmCommand = "npm";
 
 function log(message) {
   console.log(`[dev] ${message}`);
 }
 
+function spawnCommand(command, args, cwd) {
+  const options = {
+    cwd,
+    stdio: "inherit"
+  };
+
+  if (isWindows) {
+    return spawn([command, ...args].join(" "), {
+      ...options,
+      shell: true
+    });
+  }
+
+  return spawn(command, args, {
+    ...options,
+    shell: false
+  });
+}
+
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: "inherit",
-      shell: false
-    });
+    const child = spawnCommand(command, args, cwd);
 
     child.on("error", reject);
     child.on("exit", (code) => {
@@ -53,11 +69,12 @@ function ensureBackendEnv() {
   log("Created backend/.env from backend/.env.example");
 }
 
-function startDevServer(name, cwd) {
-  const child = spawn(npmCommand, ["run", "dev"], {
-    cwd,
-    stdio: "inherit",
-    shell: false
+function startDevServer(name, cwd, onStop) {
+  const child = spawnCommand(npmCommand, ["run", "dev"], cwd);
+
+  child.on("error", (error) => {
+    log(`${name} failed to start: ${error.message}`);
+    onStop(1);
   });
 
   child.on("exit", (code, signal) => {
@@ -67,6 +84,7 @@ function startDevServer(name, cwd) {
     }
 
     log(`${name} exited with code ${code}`);
+    onStop(code ?? 1);
   });
 
   return child;
@@ -78,25 +96,37 @@ async function main() {
   await ensureDependencies("frontend", frontendDir);
 
   log("Starting backend (:3001) and frontend (:5173)...");
-  const children = [
-    startDevServer("backend", backendDir),
-    startDevServer("frontend", frontendDir)
-  ];
+  let stopping = false;
+  const children = [];
 
-  const stop = () => {
+  const stop = (exitCode) => {
+    if (stopping) {
+      return;
+    }
+
+    stopping = true;
     for (const child of children) {
       if (!child.killed) {
         child.kill("SIGINT");
       }
     }
+
+    if (typeof exitCode === "number") {
+      setTimeout(() => process.exit(exitCode), 100);
+    }
   };
 
+  children.push(
+    startDevServer("backend", backendDir, stop),
+    startDevServer("frontend", frontendDir, stop)
+  );
+
   process.on("SIGINT", () => {
-    stop();
+    stop(130);
     process.exit(130);
   });
   process.on("SIGTERM", () => {
-    stop();
+    stop(143);
     process.exit(143);
   });
 }
