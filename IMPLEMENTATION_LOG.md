@@ -49,6 +49,17 @@
   вертикальный скролл списка.
 - **Отклонения от контракта:** нет.
 - **Известные баги / TODO:** нет.
+### 2026-07-11 · Ручное редактирование synth-шагов · A/C contract docs
+- **Что сделано:** контракт расширен с drum pads на кликабельный step-grid synth-дорожек. Зафиксированы выбранная
+  нота дорожки, точное правило toggle по `(step, note)`, сохранение остальных нот для аккордов и дефолтные регистры
+  по роли.
+- **Где:** `CONTRACTS.md`, `briefs/BRIEF_A_FRONTEND.md`, `docs/design/STAGE3_CLAUDE_DESIGN_PROMPT.md`.
+- **Публичный интерфейс:** Song JSON и Player API не менялись; UI продолжает менять `track.events` и вызывать
+  `player.load(updatedSong)`.
+- **Как использовать:** A добавляет note selector на synth-дорожке и использует выбранную ноту для клика по step-grid.
+- **Отклонения от контракта:** нет; уточнено существующее поле `events`.
+- **Известные баги / TODO:** реализовать UI и helper `toggleSynthStep` в зоне A; Player C уже воспроизводит валидные
+  synth events.
 
 ### 2026-07-11 · Stage 3 visual feedback build · A / UX-Front
 - **Что сделано:** сглажены движения visualizer/meters/lanes, исправлена стабильность drum lane grid без накопительного

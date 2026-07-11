@@ -97,7 +97,9 @@ Track lanes:
   - sampler: `lofi_kit`, `house_kit`, `trap_kit`.
   - synth: `sine_bass`, `saw_lead`, `square_lead`, `soft_pad`, `pluck`, `fm_bell`.
 - Для drums: клик по step cell включает/выключает hit.
-- Для synth tracks: только визуализация note blocks; редактирование нот можно показать как future/disabled.
+- Для synth tracks: grid кликабельный. Рядом с дорожкой есть компактный note selector; клик добавляет/удаляет событие
+  только с выбранной нотой на этом step, не затрагивая остальные ноты того же step. Новое событие использует
+  `dur: 1`, `vel: 0.8`; дефолты: bass `C2`, chords/pad `C3`, lead/fx `C4`.
 
 ## Визуальный стиль
 
@@ -191,6 +193,7 @@ Track lanes:
 - Play/Stop меняют визуальный статус.
 - Mute/gain/sound controls визуально обновляют дорожку.
 - Drum grid cells toggle hit state.
+- Synth grid cells toggle the selected pitch while preserving other pitch blocks in the same step.
 - BPM и Bars controls обновляют summary, размер сетки и JSON preview; при уменьшении Bars старые события за лупом
   больше не показываются.
 - Inspector показывает актуальный JSON preview.
