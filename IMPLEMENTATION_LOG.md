@@ -18,7 +18,8 @@
 | Player (Tone.js) | C | ✅ engine + sampler готовы | `createPlayer()` | `frontend/src/player/` |
 | Чат-UI + состояние | A | 🟡 рабочий базовый | — | `frontend/` |
 | Грид дорожек | A | 🟡 базовый | — | `frontend/src/App.jsx` |
-| Экспорт WAV (растяжка) | C | ⬜ не начат | `player.exportWav()` | `frontend/src/player/` |
+| Импорт/экспорт проекта | A | 🟡 запланирован (анонс) | `song-io.js` (serialize/parse/validate) | `frontend/src/song-io.js` |
+| Экспорт WAV (растяжка) | C | 🟡 запланирован (анонс) | `player.exportWav(song?)` | `frontend/src/player/` |
 
 Легенда: ⬜ не начат · 🟡 в работе · ✅ готов · ⚠️ есть отклонение/баг (см. запись).
 
@@ -38,6 +39,32 @@
 ---
 
 ## Записи
+
+### 2026-07-11 · [АНОНС] Импорт/экспорт проекта + сохранение аудио (запланировано, код ещё не влит) · A/C
+- **Что будет сделано:** перенос трека наружу и обратно + рендер итогового микса в файл. Форма Song JSON, HTTP API и
+  Player-интерфейс **не меняются**; `song.schema.json` не трогается, `version` остаётся `1`.
+  - **Экспорт проекта (A):** скачивание текущего `song` файлом. Файл = **ровно валидный Song JSON v1**, без обёртки —
+    реимпортируется, остаётся редактируемым, принимается бэком как `song` в `POST /api/compose`.
+  - **Импорт проекта (A), три способа → один конвейер:** вставка текстом (textarea), выбор файла (`<input type=file>`),
+    drag-n-drop файла **или** текста. Всё сходится в `text → parseSong → player.load`. Клиентская валидация+нормализация
+    без новых зависимостей (зеркалит `song.schema.json` и бэковый `normalizeSong`: дроп событий вне лупа, кламп dur/bpm/bars,
+    дедуп id). Ошибка ввода не роняет UI и не меняет состояние.
+  - **Сохранение аудио (C):** `player.exportWav(song?)` — офлайн-рендер (`Tone.Offline`) одного лупа в **WAV**
+    (PCM16, хелпер `audioBufferToWav`, без внешнего энкодера). Длина = `bars*4*60/bpm` c. Не трогает живой Transport.
+  - **UX:** три transport-кнопки (Импорт / Экспорт JSON / Сохранить WAV), overlay импорта с drop-zone и textarea,
+    плавные анимации и индикация строго по дизайн-системе (`docs/design/promptbeats.design-tokens.json`; motion
+    fast/base/pulse/beatFlash, cyan=drop, lime=успех, coral=ошибка), уважение `prefers-reduced-motion`.
+- **Где (план):** новые `frontend/src/song-io.js`, `frontend/src/player/wav.js`; правки
+  `frontend/src/player/index.js` (+`exportWav`), `frontend/src/App.jsx`, `frontend/src/styles.css`; юнит-тесты
+  song-io на `node --test`; сценарии в `frontend/src/player/MANUAL_SMOKE_CHECK.md`.
+- **Публичный интерфейс:** Song JSON / `/api/compose` — **БЕЗ ИЗМЕНЕНИЙ**. Аддитивно: реализация уже объявленного
+  опционального `Player.exportWav` + новый фронтовый модуль `song-io` (зона A). Задекларировано в `CONTRACTS.md`
+  (Контракт 4 + уточнение Контракта 3).
+- **Спека:** `docs/superpowers/specs/2026-07-11-import-export-audio-design.md`.
+- **Отклонения от контракта:** несовместимых нет. Аддитивные пометки внесены в `CONTRACTS.md`.
+- **Известные баги / TODO (заранее):** release-хвосты синтов на границе лупа обрезаются в WAV (рендерим ровно один луп
+  для бесшовности); импорт/экспорт — целый проект, не отдельные дорожки; только WAV (MP3/OGG вне scope). По завершении
+  добавлю запись «сделано».
 
 ### 2026-07-11 · HTML design system в репозитории · A / UX-Front
 - **Что сделано:** добавлен живой HTML style guide в папку проекта, чтобы соседние чаты/агенты могли читать

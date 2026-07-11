@@ -51,7 +51,17 @@ Song JSON / HTTP / Player-интерфейс не меняй без правки
 5. **Fallback «Пример».** Кнопка, которая грузит `sample-song.json` напрямую в плеер — страховка на демо, если LLM
    затупит. (Импортируй фикстуру или положи её в `public/`.)
 6. **Каталог.** По желанию подтянуть `GET /api/catalog` и показать доступные звуки/роли (чтобы не хардкодить списки).
-7. **Полировка.** Приятная тёмная тема, адаптив, понятный первый экран с подсказкой-плейсхолдером.
+7. **Импорт/экспорт проекта + сохранение аудио** (см. `CONTRACTS.md` Контракт 4 и
+   `docs/superpowers/specs/2026-07-11-import-export-audio-design.md`):
+   - **Экспорт JSON** — скачать текущий `song` файлом (файл = чистый Song JSON v1, реимпортируемый).
+   - **Импорт JSON** тремя способами → один конвейер `text → parseSong → player.load`: вставка текстом (textarea),
+     выбор файла (`<input type=file>`), drag-n-drop файла **или** текста. Новый чистый модуль `src/song-io.js`
+     (`serializeSong`/`parseSong`/`validateSong`/`normalizeImportedSong`/`downloadBlob`/`readFileAsText`),
+     клиентская валидация без новых зависимостей (зеркалит `song.schema.json`). Ошибка ввода не роняет UI.
+   - **Сохранение WAV** — кнопка зовёт `player.exportWav(song)` (зона C) → скачивание `Blob("audio/wav")`.
+   - **Анимации/индикация** строго по дизайн-системе (`docs/design/promptbeats.design-tokens.json`): overlay импорта,
+     drop-zone (cyan на dragover), lime-успех, coral-ошибка, `pulse` на рендере; уважай `prefers-reduced-motion`.
+8. **Полировка.** Приятная тёмная тема, адаптив, понятный первый экран с подсказкой-плейсхолдером.
 
 ## Definition of Done
 - Ввод пожелания → появляется трек и играет по кнопке Play (первый play — по клику, это требование WebAudio).

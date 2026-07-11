@@ -202,8 +202,8 @@ export interface Player {
   on(event: "step",  cb: (step: number) => void): () => void;
   on(event: "ready", cb: (p: { totalSteps: number }) => void): () => void;
   on(event: "error", cb: (e: PlayerError) => void): () => void;
-  /** Растяжка: офлайн-рендер в WAV. */
-  exportWav?(song: Song): Promise<Blob>;
+  /** Офлайн-рендер текущего микса в WAV (см. Контракт 4). Не зависит от play/stop. */
+  exportWav?(song?: Song): Promise<Blob>;
   /** Освобождает ресурсы Tone (при размонтировании). */
   dispose(): void;
 }
@@ -240,6 +240,46 @@ player.on("step", (s) => setPlayhead(s));
 - `bpm`, `bars`, `gain`, `muted`, `sound` и `events` применяются при каждом `load(song)`, чтобы ручные контролы фронта
   работали через правку Song JSON без отдельного Player API; `ready.totalSteps` после загрузки равен `bars * 16`.
 - Работает в Chrome/Firefox/Safari через WebAudio (Web MIDI не нужен).
+- `exportWav(song?)` — офлайн-рендер (`Tone.Offline`) одного лупа в WAV. Длина = `bars * 4 * 60 / bpm` секунд
+  (= `bars*16` шестнадцатых). Не трогает живой `Tone.Transport`/Destination — можно звать во время воспроизведения.
+  Без аргумента рендерит последний загруженный Song. Возвращает `Blob` с `type: "audio/wav"`. Детали — Контракт 4.
+
+---
+
+## Контракт 4 — Импорт/экспорт проекта (A) + рендер аудио (C)
+
+Всё это **не меняет** форму Song JSON, HTTP API или Player-интерфейс — только добавляет фронтовые операции над
+уже существующими данными. `song.schema.json` **не меняется**, `version` остаётся `1`.
+
+### Формат файла проекта
+Экспортируемый `.json` — **ровно валидный Song JSON v1**, без обёртки-метаданных (та же форма, что `sample-song.json`).
+Поэтому файл: реимпортируется и остаётся редактируемым; принимается бэком как `song` в `POST /api/compose`;
+проходит `song.schema.json` без распаковки. Имя файла: `slug(title || "promptbeats") + ".json" | ".wav"`.
+
+### Модуль `frontend/src/song-io.js` (владелец A, чистый — без Tone/React)
+```ts
+serializeSong(song: Song): string;                 // JSON.stringify(song, null, 2) + "\n"
+parseSong(text: string):                           // JSON.parse → validate → normalize
+  { ok: true, song: Song, warnings: string[] } | { ok: false, error: string };
+validateSong(song: unknown):                       // лёгкая, без зависимостей; зеркалит song.schema.json
+  { ok: boolean, errors: string[] };
+normalizeImportedSong(song: Song):                 // дроп событий вне лупа, кламп dur/bpm/bars/gain, дедуп id
+  { song: Song, warnings: string[] };              // идемпотентна
+songFilename(song: Song, ext: "json" | "wav"): string;
+downloadBlob(blob: Blob, filename: string): void;
+readFileAsText(file: File): Promise<string>;
+```
+Инвариант round-trip: `parseSong(serializeSong(song)).song` глубоко равен нормализованному `song`.
+`validateSong` держать в синхроне с `song.schema.json` при правках схемы.
+
+### Импорт — три способа, один конвейер
+Textarea-вставка, выбор файла и drag-n-drop (файл **или** текст) сходятся в
+`text → parseSong → (loadSong при ok) → player.load`. При drop: если есть `dataTransfer.files[0]` — читаем файл,
+иначе берём `dataTransfer.getData("text")`. Успех → `player.load(song)` + warnings (если есть) как мягкое уведомление.
+Ошибка → человекочитаемое сообщение, состояние приложения не меняется.
+
+### Рендер аудио
+`player.exportWav(song?)` → `Blob("audio/wav")` (см. Контракт 3). WAV выбран как свободный формат без внешнего энкодера.
 
 ---
 
