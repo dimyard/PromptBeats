@@ -57,6 +57,16 @@
   боевой Anthropic через прокси — валидный Song (128 BPM, ~4s).
 - **Известные баги / TODO:** таймаут не ограничивает чтение тела ответа (только установление/заголовки); rate-limit in-memory (один процесс).
 
+### 2026-07-11 · Design tokens для импорта/экспорта · A / UX-Front
+- **Что сделано:** добавлен отдельный машинно-читаемый файл дизайн-токенов PromptBeats: цвета, шрифты, spacing,
+  radius, semantic aliases, states, component hints и export map для CSS/Figma-like импорта.
+- **Где:** `docs/design/promptbeats.design-tokens.json`.
+- **Публичный интерфейс:** изменений runtime-контрактов нет; это дизайн-артефакт для будущего этапа 3.
+- **Как использовать:** брать JSON как source of truth; из `exports.css.variables` можно сгенерировать `:root`, а
+  `tokens.semantic`/`tokens.state` использовать для адаптивного visual layer.
+- **Отклонения от контракта:** нет.
+- **Известные баги / TODO:** генератор `tokens.css` пока не добавлен; при необходимости сделать отдельным маленьким скриптом.
+
 ### 2026-07-11 · Windows fix для one-command launcher · Codex
 - **Что сделано:** исправлен `spawn EINVAL` при `npm run dev` в Windows PowerShell. Launcher теперь запускает `npm`
   через shell на Windows и корректно останавливает второй dev-сервер, если первый не стартовал или завершился.

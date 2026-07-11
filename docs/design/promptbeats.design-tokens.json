@@ -1,0 +1,377 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "name": "PromptBeats Graphite Studio",
+  "version": "1.0.0",
+  "updated": "2026-07-11",
+  "description": "Единый источник дизайн-токенов PromptBeats для импорта в прототип, экспорта в CSS и синхронизации с дизайн-инструментами.",
+  "source": {
+    "artifact": "promptbeats-design-system.html",
+    "owner": "A / UX-Front",
+    "language": "ru",
+    "stage": "design-system"
+  },
+  "tokens": {
+    "color": {
+      "surface": {
+        "base": {
+          "$type": "color",
+          "$value": "#101113",
+          "cssVariable": "--base",
+          "description": "Фон приложения и поля step-grid."
+        },
+        "panel": {
+          "$type": "color",
+          "$value": "#1A1D21",
+          "cssVariable": "--panel",
+          "description": "Основные панели: чат, transport, inspector, studio blocks."
+        },
+        "raised": {
+          "$type": "color",
+          "$value": "#23272D",
+          "cssVariable": "--raised",
+          "description": "Кнопки, чипы, поля ввода и слегка поднятые controls."
+        }
+      },
+      "line": {
+        "default": {
+          "$type": "color",
+          "$value": "#2C3138",
+          "cssVariable": "--line",
+          "description": "Границы интерактивных controls."
+        },
+        "soft": {
+          "$type": "color",
+          "$value": "#24282E",
+          "cssVariable": "--line-soft",
+          "description": "Тонкие разделители панелей и строк."
+        }
+      },
+      "text": {
+        "primary": {
+          "$type": "color",
+          "$value": "#F5F2EA",
+          "cssVariable": "--text",
+          "description": "Основной текст, заголовки и ключевые значения."
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "#AEB4BD",
+          "cssVariable": "--muted",
+          "description": "Вторичный текст, body copy, подписи сообщений."
+        },
+        "dim": {
+          "$type": "color",
+          "$value": "#6E747D",
+          "cssVariable": "--dim",
+          "description": "Лейблы, мелкие подписи, неактивные значения."
+        }
+      },
+      "accent": {
+        "lime": {
+          "$type": "color",
+          "$value": "#B7FF5A",
+          "cssVariable": "--lime",
+          "description": "Play, audible, активные ноты и позитивные валидные состояния."
+        },
+        "cyan": {
+          "$type": "color",
+          "$value": "#35D7FF",
+          "cssVariable": "--cyan",
+          "description": "AI, generation, send action, shimmer и ссылки."
+        },
+        "coral": {
+          "$type": "color",
+          "$value": "#FF6B5F",
+          "cssVariable": "--coral",
+          "description": "Edit, mute, error, toast и retry-состояния."
+        },
+        "amber": {
+          "$type": "color",
+          "$value": "#FFC857",
+          "cssVariable": "--amber",
+          "description": "Current beat, playhead, selection и solo."
+        }
+      }
+    },
+    "font": {
+      "family": {
+        "ui": {
+          "$type": "fontFamily",
+          "$value": "Space Grotesk, system-ui, sans-serif",
+          "cssVariable": "--font-ui",
+          "description": "Основной интерфейсный шрифт."
+        },
+        "mono": {
+          "$type": "fontFamily",
+          "$value": "IBM Plex Mono, ui-monospace, monospace",
+          "cssVariable": "--font-mono",
+          "description": "BPM, ноты, JSON, технические лейблы и tabular data."
+        }
+      },
+      "size": {
+        "label": {
+          "$type": "dimension",
+          "$value": "10px",
+          "description": "Caps labels и технические подписи."
+        },
+        "dataSmall": {
+          "$type": "dimension",
+          "$value": "11px",
+          "description": "Мелкие числовые значения и chips."
+        },
+        "body": {
+          "$type": "dimension",
+          "$value": "14px",
+          "description": "Основной текст интерфейса."
+        },
+        "title": {
+          "$type": "dimension",
+          "$value": "16px",
+          "description": "Локальные заголовки панелей."
+        },
+        "display": {
+          "$type": "dimension",
+          "$value": "22px",
+          "description": "Крупный брендовый заголовок, без hero-типографики."
+        }
+      },
+      "weight": {
+        "regular": {
+          "$type": "fontWeight",
+          "$value": 400
+        },
+        "medium": {
+          "$type": "fontWeight",
+          "$value": 500
+        },
+        "semibold": {
+          "$type": "fontWeight",
+          "$value": 600
+        }
+      }
+    },
+    "space": {
+      "s1": {
+        "$type": "dimension",
+        "$value": "4px",
+        "cssVariable": "--s1"
+      },
+      "s2": {
+        "$type": "dimension",
+        "$value": "8px",
+        "cssVariable": "--s2"
+      },
+      "s3": {
+        "$type": "dimension",
+        "$value": "12px",
+        "cssVariable": "--s3"
+      },
+      "s4": {
+        "$type": "dimension",
+        "$value": "16px",
+        "cssVariable": "--s4"
+      },
+      "s5": {
+        "$type": "dimension",
+        "$value": "24px",
+        "cssVariable": "--s5"
+      },
+      "s6": {
+        "$type": "dimension",
+        "$value": "32px",
+        "cssVariable": "--s6"
+      }
+    },
+    "radius": {
+      "sm": {
+        "$type": "dimension",
+        "$value": "6px",
+        "cssVariable": "--r-sm",
+        "description": "Controls, chips, track cells."
+      },
+      "md": {
+        "$type": "dimension",
+        "$value": "10px",
+        "cssVariable": "--r-md",
+        "description": "Composer, toast, compact panels."
+      },
+      "lg": {
+        "$type": "dimension",
+        "$value": "14px",
+        "cssVariable": "--r-lg",
+        "description": "Крупные app panels и visualizer blocks."
+      }
+    },
+    "semantic": {
+      "play": {
+        "$type": "color",
+        "$value": "{color.accent.lime}",
+        "description": "Активное воспроизведение."
+      },
+      "audible": {
+        "$type": "color",
+        "$value": "{color.accent.lime}",
+        "description": "Слышимая дорожка или активная нота."
+      },
+      "generation": {
+        "$type": "color",
+        "$value": "{color.accent.cyan}",
+        "description": "LLM-запрос, ожидание генерации и AI-акцент."
+      },
+      "send": {
+        "$type": "color",
+        "$value": "{color.accent.cyan}",
+        "description": "Основное действие composer."
+      },
+      "edit": {
+        "$type": "color",
+        "$value": "{color.accent.coral}",
+        "description": "Ручная правка или активный mute."
+      },
+      "error": {
+        "$type": "color",
+        "$value": "{color.accent.coral}",
+        "description": "Ошибки backend/player/schema."
+      },
+      "playhead": {
+        "$type": "color",
+        "$value": "{color.accent.amber}",
+        "description": "Текущий шаг воспроизведения."
+      },
+      "selection": {
+        "$type": "color",
+        "$value": "{color.accent.amber}",
+        "description": "Выбранный beat/event."
+      }
+    },
+    "state": {
+      "ready": {
+        "accent": "{color.text.muted}",
+        "statusLabel": "Готово",
+        "description": "Song загружен, transport доступен."
+      },
+      "playing": {
+        "accent": "{color.accent.lime}",
+        "statusLabel": "Играет",
+        "description": "Play active, meters/equalizer дышат, playhead движется."
+      },
+      "generating": {
+        "accent": "{color.accent.cyan}",
+        "statusLabel": "Генерация",
+        "description": "Composer disabled, visualizer показывает cyan shimmer."
+      },
+      "error": {
+        "accent": "{color.accent.coral}",
+        "statusLabel": "Ошибка",
+        "description": "Toast/error row с retry и коротким human-readable текстом."
+      }
+    },
+    "motion": {
+      "fast": {
+        "$type": "duration",
+        "$value": "120ms",
+        "description": "Hover и icon state."
+      },
+      "base": {
+        "$type": "duration",
+        "$value": "180ms",
+        "description": "Toggle, toast, inspector slide."
+      },
+      "pulse": {
+        "$type": "duration",
+        "$value": "700ms",
+        "description": "Generating/status pulse."
+      },
+      "beatFlash": {
+        "$type": "duration",
+        "$value": "160ms",
+        "description": "Subtle lane flash на активном событии."
+      }
+    },
+    "component": {
+      "transportButton": {
+        "size": "38px",
+        "radius": "{radius.sm}",
+        "background": "{color.surface.raised}",
+        "activePlay": "{color.accent.lime}"
+      },
+      "sendButton": {
+        "size": "32px",
+        "radius": "8px",
+        "background": "{color.accent.cyan}"
+      },
+      "trackLane": {
+        "height": "40px",
+        "gridStepsPerBar": 16,
+        "background": "{color.surface.base}",
+        "activeNote": "{color.accent.lime}",
+        "playhead": "{color.accent.amber}"
+      },
+      "trackMeter": {
+        "width": "6px",
+        "height": "32px",
+        "fill": "{color.accent.lime}",
+        "peak": "{color.accent.amber}"
+      },
+      "statusPill": {
+        "radius": "999px",
+        "font": "{font.family.mono}",
+        "dotSize": "6px"
+      },
+      "toast": {
+        "radius": "{radius.md}",
+        "background": "{color.surface.raised}",
+        "border": "{color.accent.coral}"
+      }
+    }
+  },
+  "exports": {
+    "css": {
+      "selector": ":root",
+      "variables": {
+        "--base": "{tokens.color.surface.base}",
+        "--panel": "{tokens.color.surface.panel}",
+        "--raised": "{tokens.color.surface.raised}",
+        "--line": "{tokens.color.line.default}",
+        "--line-soft": "{tokens.color.line.soft}",
+        "--text": "{tokens.color.text.primary}",
+        "--muted": "{tokens.color.text.muted}",
+        "--dim": "{tokens.color.text.dim}",
+        "--lime": "{tokens.color.accent.lime}",
+        "--cyan": "{tokens.color.accent.cyan}",
+        "--coral": "{tokens.color.accent.coral}",
+        "--amber": "{tokens.color.accent.amber}",
+        "--font-ui": "{tokens.font.family.ui}",
+        "--font-mono": "{tokens.font.family.mono}",
+        "--r-sm": "{tokens.radius.sm}",
+        "--r-md": "{tokens.radius.md}",
+        "--r-lg": "{tokens.radius.lg}",
+        "--s1": "{tokens.space.s1}",
+        "--s2": "{tokens.space.s2}",
+        "--s3": "{tokens.space.s3}",
+        "--s4": "{tokens.space.s4}",
+        "--s5": "{tokens.space.s5}",
+        "--s6": "{tokens.space.s6}"
+      }
+    },
+    "figmaTokens": {
+      "preferredCollection": "PromptBeats",
+      "modes": ["dark"],
+      "notes": "Импортировать color/font/space/radius как базовые токены; semantic/state держать как aliases."
+    }
+  },
+  "principles": {
+    "do": [
+      "Один семантический акцент на состояние: play -> lime, AI -> cyan, edit/error -> coral, selection -> amber.",
+      "Все числа и структуры показывать моноширинным шрифтом с tabular-nums.",
+      "Фиксировать размеры step cells, meters, icon buttons и panels; анимировать цвет, opacity и высоту заливки.",
+      "Связывать subtle visual feedback с playing state и current step, не меняя layout."
+    ],
+    "dont": [
+      "Не использовать purple-blue AI gradients, decorative blobs и marketing hero.",
+      "Не вкладывать cards inside cards.",
+      "Не использовать coral как декор вне edit/error.",
+      "Не переносить mock-поля pattern/notes из дизайн-прототипов; только tracks[].events."
+    ]
+  }
+}
