@@ -7,6 +7,7 @@ import { deriveMusicUiState } from "./musicUiState.js";
 import { createPlayer } from "./player/index.js";
 import {
   addTrack,
+  defaultSynthNote,
   DRUM_NOTE_LABELS,
   DRUM_NOTES,
   FALLBACK_CATALOG,
@@ -18,7 +19,9 @@ import {
   setTrackMuted,
   setTrackSound,
   soundsForInstrument,
+  SYNTH_NOTES,
   toggleDrumStep,
+  toggleSynthStep,
   totalSteps as getTotalSteps,
 } from "./songEditing.js";
 import {
@@ -169,6 +172,7 @@ export default function App() {
   const [lastPrompt, setLastPrompt] = useState("");
   const [lastError, setLastError] = useState("");
   const [drumNotes, setDrumNotes] = useState({});
+  const [synthNotes, setSynthNotes] = useState({});
   const [trackDraft, setTrackDraft] = useState(DEFAULT_ADD_TRACK);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
@@ -953,9 +957,11 @@ export default function App() {
               busy={busy}
               catalog={catalog}
               selectedDrumNote={drumNotes[track.id] ?? "C2"}
+              selectedSynthNote={synthNotes[track.id] ?? defaultSynthNote(track.role)}
               dragged={draggedTrackId === track.id}
               dropTarget={dropTargetTrackId === track.id && draggedTrackId !== track.id}
               onSelectedDrumNoteChange={(note) => setDrumNotes((current) => ({ ...current, [track.id]: note }))}
+              onSelectedSynthNoteChange={(note) => setSynthNotes((current) => ({ ...current, [track.id]: note }))}
               onSelectTrack={() => setSelectedTrackId(track.id)}
               onDragStart={(event) => {
                 setDraggedTrackId(track.id);
@@ -993,6 +999,11 @@ export default function App() {
                 setSelectedTrackId(track.id);
                 setSelectedEventStep(index);
                 applySongEdit((current) => toggleDrumStep(current, track.id, index, note));
+              }}
+              onToggleSynthStep={(index, note) => {
+                setSelectedTrackId(track.id);
+                setSelectedEventStep(index);
+                applySongEdit((current) => toggleSynthStep(current, track.id, index, note));
               }}
             />
           ))}
@@ -1517,9 +1528,11 @@ function TrackRow({
   busy,
   catalog,
   selectedDrumNote,
+  selectedSynthNote,
   dragged,
   dropTarget,
   onSelectedDrumNoteChange,
+  onSelectedSynthNoteChange,
   onSelectTrack,
   onDragStart,
   onDragEnter,
@@ -1530,6 +1543,7 @@ function TrackRow({
   onGainChange,
   onSoundChange,
   onToggleDrumStep,
+  onToggleSynthStep,
 }) {
   const laneRef = useRef(null);
   const isSampler = track.instrument === "sampler";
@@ -1630,6 +1644,18 @@ function TrackRow({
             </select>
           </label>
         )}
+        {!isSampler && (
+          <label className="sound-control note-control">
+            <span>note</span>
+            <select value={selectedSynthNote} onChange={(event) => onSelectedSynthNoteChange(event.target.value)} disabled={busy}>
+              {SYNTH_NOTES.map((note) => (
+                <option value={note} key={note}>
+                  {note}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="gain-control">
           <span>{Math.round((track.gain ?? 0.8) * 100)}</span>
           <input
@@ -1672,9 +1698,21 @@ function TrackRow({
       ) : (
         <div className="lane" ref={laneRef}>
           <div className="lane-notes" style={laneStyle}>
-            {Array.from({ length: totalSteps }).map((_, index) => (
-              <i className={`${index === activeStep ? "is-active" : ""} ${selected && selectedEventStep === index ? "is-selected" : ""}`} key={index} />
-            ))}
+            {Array.from({ length: totalSteps }).map((_, index) => {
+              const events = eventsByStep.get(index) ?? [];
+              const hasSelectedNote = events.some((event) => event.note === selectedSynthNote);
+              return (
+                <button
+                  className={`note-step ${events.length ? "has-event" : ""} ${hasSelectedNote ? "has-selected-note" : ""} ${activeEventSteps.has(index) ? "is-event-active" : ""} ${index === activeStep ? "is-active" : ""} ${selected && selectedEventStep === index ? "is-selected" : ""}`}
+                  key={index}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onToggleSynthStep(index, selectedSynthNote)}
+                  title={events.map((event) => `${event.note}, dur ${event.dur ?? 1}, vel ${event.vel ?? 0.8}`).join("\n") || `Step ${index + 1}: добавить ${selectedSynthNote}`}
+                  aria-label={`Step ${index + 1}, ${hasSelectedNote ? "удалить" : "добавить"} ${selectedSynthNote}`}
+                />
+              );
+            })}
             {(track.events ?? []).map((event, index) => {
               const dur = event.dur ?? 1;
               return (

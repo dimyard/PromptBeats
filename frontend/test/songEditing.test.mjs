@@ -9,6 +9,7 @@ import {
   setTrackMuted,
   setTrackSound,
   toggleDrumStep,
+  toggleSynthStep,
 } from "../src/songEditing.js";
 
 const song = {
@@ -73,6 +74,20 @@ describe("song editing helpers", () => {
     assert.equal(added.tracks[0].events.some((event) => event.step === 4 && event.note === "F#2"), true);
     const removed = toggleDrumStep(added, "drums", 4, "F#2");
     assert.equal(removed.tracks[0].events.some((event) => event.step === 4 && event.note === "F#2"), false);
+  });
+
+  it("toggles synth notes by step and keeps other notes for chords", () => {
+    const addedC = toggleSynthStep(song, "bass", 4, "C2");
+    const addedE = toggleSynthStep(addedC, "bass", 4, "E2");
+    const bassEvents = addedE.tracks[1].events.filter((event) => event.step === 4);
+    assert.deepEqual(bassEvents, [
+      { step: 4, note: "C2", dur: 1, vel: 0.8 },
+      { step: 4, note: "E2", dur: 1, vel: 0.8 },
+    ]);
+
+    const removedC = toggleSynthStep(addedE, "bass", 4, "C2");
+    const remainingStepEvents = removedC.tracks[1].events.filter((event) => event.step === 4);
+    assert.deepEqual(remainingStepEvents, [{ step: 4, note: "E2", dur: 1, vel: 0.8 }]);
   });
 
   it("adds a compatible empty track with a unique id", () => {

@@ -1261,31 +1261,50 @@ summary:focus-visible {
 }
 
 .step-button.is-event-active,
+.note-step.is-event-active,
 .note-block.is-event-active {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lime) 70%, transparent);
 }
 
 .step-button.is-active,
-.lane-notes > i.is-active {
+.note-step.is-active {
   box-shadow: inset 0 0 0 2px var(--amber);
   background-color: rgba(255, 200, 87, 0.2);
 }
 
 .step-button.is-selected,
-.lane-notes > i.is-selected,
+.note-step.is-selected,
 .note-block.is-selected {
   box-shadow: inset 0 0 0 2px var(--amber);
 }
 
-.lane-notes > i {
+.note-step {
+  display: block;
+  min-width: 0;
+  height: 2.7rem;
+  border: 0;
   border-right: 1px solid var(--line-soft);
+  background: transparent;
+  cursor: pointer;
   transition:
     background-color 180ms ease,
     box-shadow 180ms ease;
 }
 
-.lane-notes > i:nth-child(4n) {
+.note-step:nth-child(4n) {
   border-right-color: var(--line);
+}
+
+.note-step.has-event {
+  background: color-mix(in srgb, var(--track-accent) 9%, transparent);
+}
+
+.note-step.has-selected-note {
+  background: color-mix(in srgb, var(--track-accent) 18%, transparent);
+}
+
+.note-step:disabled {
+  cursor: default;
 }
 
 .note-block {

@@ -18,6 +18,20 @@ export const DRUM_NOTES = [
 ];
 
 export const DRUM_NOTE_LABELS = Object.fromEntries(DRUM_NOTES.map((item) => [item.note, item.short]));
+export const SYNTH_NOTES = [
+  "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1",
+  "C2", "C#2", "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2",
+  "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3",
+  "C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4",
+  "C5",
+];
+export const DEFAULT_SYNTH_NOTE_BY_ROLE = {
+  bass: "C2",
+  chords: "C3",
+  pad: "C3",
+  lead: "C4",
+  fx: "C4",
+};
 
 export function clamp(value, min, max) {
   const number = Number(value);
@@ -151,6 +165,32 @@ export function toggleDrumStep(song, trackId, step, note = "C2") {
     const nextEvents = exists
       ? events.filter((event) => !(event.step === safeStep && event.note === note))
       : [...events, { step: safeStep, note, vel: note === "C2" ? 0.9 : 0.55 }];
+
+    return {
+      ...track,
+      events: nextEvents.sort((a, b) => a.step - b.step || String(a.note).localeCompare(String(b.note))),
+    };
+  });
+}
+
+export function defaultSynthNote(role) {
+  return DEFAULT_SYNTH_NOTE_BY_ROLE[role] ?? "C4";
+}
+
+export function toggleSynthStep(song, trackId, step, note, dur = 1) {
+  const maxStep = totalSteps(song);
+  const safeStep = Math.round(step);
+  if (safeStep < 0 || safeStep >= maxStep) return song;
+
+  return updateTrack(song, trackId, (track) => {
+    if (track.instrument !== "synth") return track;
+    const selectedNote = SYNTH_NOTES.includes(note) ? note : defaultSynthNote(track.role);
+    const safeDur = clamp(Math.round(dur), 1, maxStep - safeStep);
+    const events = track.events ?? [];
+    const exists = events.some((event) => event.step === safeStep && event.note === selectedNote);
+    const nextEvents = exists
+      ? events.filter((event) => !(event.step === safeStep && event.note === selectedNote))
+      : [...events, { step: safeStep, note: selectedNote, dur: safeDur, vel: 0.8 }];
 
     return {
       ...track,
