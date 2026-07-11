@@ -15,7 +15,7 @@
 | Фикстура-мок | все | ✅ готов | `sample-song.json` | корень |
 | Бэк `/api/compose` | B | 🟡 каркас готов | `POST /api/compose`, `GET /api/catalog` | `backend/` |
 | LLM-промт + валидатор | B | 🟡 валидатор+ретрай готовы, LLM — заглушка | `backend/src/llm.js` | `backend/` |
-| Player (Tone.js) | C | 🟡 рабочий базовый | `createPlayer()` | `frontend/src/player/` |
+| Player (Tone.js) | C | ✅ engine + sampler готовы | `createPlayer()` | `frontend/src/player/` |
 | Чат-UI + состояние | A | 🟡 рабочий базовый | — | `frontend/` |
 | Грид дорожек | A | 🟡 базовый | — | `frontend/src/App.jsx` |
 | Экспорт WAV (растяжка) | C | ⬜ не начат | `player.exportWav()` | `frontend/src/player/` |
@@ -38,6 +38,24 @@
 ---
 
 ## Записи
+
+### 2026-07-11 · Player + sampler engine · C
+- **Что сделано:** плеер теперь выбирает synth/kit по `track.instrument`, защищённо обрабатывает неизвестные sound,
+  применяет `gain`, `muted`, `sound` и `events` при каждом идемпотентном `load(song)`; события вне лупа репортятся,
+  длительность клампится. Убрана глобальная очистка чужих Transport-событий. Добавлены различимые автономные киты
+  `lofi_kit`, `house_kit`, `trap_kit`, все ноты Drum note map и fallback неизвестной drum-ноды на kick.
+- **Где:** `frontend/src/player/index.js`, `frontend/src/player/sounds.js`,
+  `frontend/src/player/MANUAL_SMOKE_CHECK.md`.
+- **Публичный интерфейс:** без изменений: `import { createPlayer } from "./player/index.js"`; методы
+  `load`, `play`, `stop`, `isPlaying`, `on`, `dispose` соответствуют `CONTRACTS.md`.
+- **Как использовать:** `const player = createPlayer(); await player.load(song); await player.play();`.
+  Ручные контролы A меняют поля дорожек в Song JSON и вызывают `await player.load(updatedSong)`.
+- **Отклонения от контракта:** нет; киты синтезированы локально, поэтому не требуют лицензируемых аудиофайлов.
+- **Проверено:** `node --check` для обоих аудиомодулей, `git diff --check`; browser smoke-сценарий описан в
+  `frontend/src/player/MANUAL_SMOKE_CHECK.md`.
+- **Известные баги / TODO:** `exportWav()` пока не реализован (опциональный метод контракта); в текущей среде
+  production-сборка Vite не получила ответ от проверки разрешений, поэтому остаётся прогнать `npm run build`
+  и браузерный smoke-check на машине разработчика.
 
 ### 2026-07-11 · Sampler engine и ручные контролы · C/A contract docs
 - **Что сделано:** явно добавлен sampler/kit слой в контракт и brief C; для A описаны ручные контролы дорожек.

@@ -12,6 +12,17 @@ const stepToTime = (step) => {
   return `${bar}:${quarter}:${rem}`;
 };
 
+const DEFAULT_BPM = 120;
+const DEFAULT_BARS = 1;
+const DEFAULT_GAIN = 0.8;
+
+const numberInRange = (value, fallback, min, max) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+};
+
+const safeSteps = (bars) => Math.max(16, Math.floor(numberInRange(bars, DEFAULT_BARS, 1, 64)) * 16);
+
 export function createPlayer() {
   let parts = [];
   let voices = [];
@@ -28,7 +39,6 @@ export function createPlayer() {
     voices.forEach((v) => v.dispose?.());
     parts = [];
     voices = [];
-    Tone.Transport.cancel(0);
   }
 
   async function load(song) {
@@ -37,23 +47,37 @@ export function createPlayer() {
       Tone.Transport.stop();
       teardown();
 
-      Tone.Transport.bpm.value = song.bpm ?? 120;
-      totalSteps = (song.bars ?? 1) * 16;
+      Tone.Transport.bpm.value = numberInRange(song?.bpm, DEFAULT_BPM, 40, 240);
+      totalSteps = safeSteps(song?.bars);
       Tone.Transport.loop = true;
       Tone.Transport.loopStart = 0;
-      Tone.Transport.loopEnd = `${song.bars ?? 1}:0:0`;
+      Tone.Transport.loopEnd = `${totalSteps / 16}:0:0`;
 
-      for (const track of song.tracks ?? []) {
-        if (track.muted) continue;
-        const gain = new Tone.Gain(track.gain ?? 0.8).toDestination();
+      for (const track of song?.tracks ?? []) {
+        const gain = new Tone.Gain(track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1)).toDestination();
         voices.push(gain);
 
         let voice;
-        const kit = isKit(track.sound);
-        if (kit) {
-          voice = makeKit(track.sound, gain);
+        const wantsKit = track.instrument === "sampler";
+        const kit = wantsKit && isKit(track.sound);
+        if (wantsKit) {
+          if (!kit) {
+            emit("error", {
+              code: "unknown_sound",
+              message: `unknown kit \"${track.sound}\", using lofi_kit`,
+              details: { track: track.id, sound: track.sound },
+            });
+          }
+          voice = makeKit(kit ? track.sound : "lofi_kit", gain);
         } else {
-          voice = makeSynth(track.sound);
+          if (isKit(track.sound)) {
+            emit("error", {
+              code: "instrument_sound_mismatch",
+              message: `synth track cannot use kit \"${track.sound}\", using pluck`,
+              details: { track: track.id, instrument: track.instrument, sound: track.sound },
+            });
+          }
+          voice = makeSynth(isKit(track.sound) ? "pluck" : track.sound);
           if (!voice) {
             emit("error", {
               code: "unknown_sound",
@@ -77,12 +101,12 @@ export function createPlayer() {
             });
             continue;
           }
-          const dur = Math.max(1, Math.min(e.dur ?? 1, totalSteps - e.step));
+          const dur = Math.max(1, Math.min(numberInRange(e.dur, 1, 1, totalSteps), totalSteps - e.step));
           evts.push([stepToTime(e.step), { ...e, dur }]);
         }
         const part = new Tone.Part((time, e) => {
           const vel = e.vel ?? 0.8;
-          if (kit) {
+          if (wantsKit) {
             voice.trigger(e.note, time, vel);
           } else {
             const durSec = Tone.Time(`0:0:${e.dur}`).toSeconds();
@@ -137,7 +161,10 @@ export function createPlayer() {
         if (i >= 0) arr.splice(i, 1);
       };
     },
-    dispose: () => { teardown(); },
+    dispose: () => {
+      stop();
+      teardown();
+    },
     // exportWav(song) {}  // stretch goal — Tone.Offline render
   };
 }
