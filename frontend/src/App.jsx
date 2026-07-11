@@ -1267,85 +1267,121 @@ function MetaCard({ label, value }) {
   );
 }
 
-function PreviewControls({ settings, musicState, onChange, onRandomizeMeters }) {
+function PreviewControls({ settings, musicState, onChange, onRandomizeMeters, onClose }) {
   const update = (key, value) => onChange({ [key]: value });
+  const optionLabel = (value) => VARIANT_LABELS[value] ?? value;
   return (
-    <section className="preview-controls" aria-label="Music reactive preview">
-      <label>
-        <span>visual</span>
-        <select value={settings.visualizerVariant} onChange={(event) => update("visualizerVariant", event.target.value)}>
-          {VISUALIZER_VARIANTS.map((variant) => (
-            <option value={variant} key={variant}>
-              {variant}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>lane</span>
-        <select value={settings.laneVariant} onChange={(event) => update("laneVariant", event.target.value)}>
-          {LANE_VARIANTS.map((variant) => (
-            <option value={variant} key={variant}>
-              {variant}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>layout</span>
-        <select value={settings.layoutVariant} onChange={(event) => update("layoutVariant", event.target.value)}>
-          {LAYOUT_VARIANTS.map((variant) => (
-            <option value={variant} key={variant}>
-              {variant}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>state</span>
-        <select value={settings.statePreset} onChange={(event) => update("statePreset", event.target.value)}>
-          {STATE_PRESETS.map((preset) => (
-            <option value={preset} key={preset}>
-              {preset}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="preview-step">
-        <span>step {musicState.playback.currentStep + 1}</span>
-        <input
-          type="range"
-          min="0"
-          max={Math.max(0, musicState.playback.totalSteps - 1)}
-          value={settings.mockCurrentStep}
-          onChange={(event) => update("mockCurrentStep", Number(event.target.value))}
-          disabled={settings.statePreset === "live"}
-        />
-      </label>
-      <label className="preview-check">
-        <input type="checkbox" checked={settings.mockAutoPlay} onChange={(event) => update("mockAutoPlay", event.target.checked)} />
-        <span>auto</span>
-      </label>
-      <label className="preview-check">
-        <input type="checkbox" checked={settings.randomMeters} onChange={(event) => update("randomMeters", event.target.checked)} />
-        <span>meters</span>
-      </label>
-      <button type="button" onClick={onRandomizeMeters}>
-        Random
-      </button>
-      <label className="preview-check">
-        <input type="checkbox" checked={settings.forceGenerating} onChange={(event) => update("forceGenerating", event.target.checked)} />
-        <span>gen</span>
-      </label>
-      <label className="preview-check">
-        <input type="checkbox" checked={settings.forceError} onChange={(event) => update("forceError", event.target.checked)} />
-        <span>error</span>
-      </label>
-      <label className="preview-check">
-        <input type="checkbox" checked={settings.selectCurrentStep} onChange={(event) => update("selectCurrentStep", event.target.checked)} />
-        <span>select</span>
-      </label>
-    </section>
+    <aside className="design-lab-drawer" id="design-lab-panel" aria-label="Design Lab">
+      <header className="design-lab-header">
+        <div>
+          <p className="eyebrow">Internal tool</p>
+          <h3>Design Lab</h3>
+        </div>
+        <span className="dev-chip">DEV</span>
+        <button className="icon-button lab-close" type="button" onClick={onClose} aria-label="Закрыть Design Lab">
+          ×
+        </button>
+      </header>
+
+      <section className="design-lab-section">
+        <div className="design-lab-section-title">
+          <span>Variants</span>
+        </div>
+        <div className="preview-controls">
+          <label>
+            <span>Visualizer</span>
+            <select value={settings.visualizerVariant} onChange={(event) => update("visualizerVariant", event.target.value)}>
+              {VISUALIZER_VARIANTS.map((variant) => (
+                <option value={variant} key={variant}>
+                  {optionLabel(variant)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Lane</span>
+            <select value={settings.laneVariant} onChange={(event) => update("laneVariant", event.target.value)}>
+              {LANE_VARIANTS.map((variant) => (
+                <option value={variant} key={variant}>
+                  {optionLabel(variant)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Layout</span>
+            <select value={settings.layoutVariant} onChange={(event) => update("layoutVariant", event.target.value)}>
+              {LAYOUT_VARIANTS.map((variant) => (
+                <option value={variant} key={variant}>
+                  {optionLabel(variant)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="design-lab-section">
+        <div className="design-lab-section-title">
+          <span>Music State</span>
+          <strong>{musicState.playback.currentStep + 1}/{musicState.playback.totalSteps}</strong>
+        </div>
+        <div className="preview-controls">
+          <label>
+            <span>Preset</span>
+            <select value={settings.statePreset} onChange={(event) => update("statePreset", event.target.value)}>
+              {STATE_PRESETS.map((preset) => (
+                <option value={preset} key={preset}>
+                  {optionLabel(preset)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="preview-step">
+            <span>Current step</span>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(0, musicState.playback.totalSteps - 1)}
+              value={settings.mockCurrentStep}
+              onChange={(event) => update("mockCurrentStep", Number(event.target.value))}
+              disabled={settings.statePreset === "live"}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="design-lab-section">
+        <div className="design-lab-section-title">
+          <span>Mock Signals</span>
+        </div>
+        <div className="preview-switches">
+          <label className="preview-check">
+            <input type="checkbox" checked={settings.mockAutoPlay} onChange={(event) => update("mockAutoPlay", event.target.checked)} />
+            <span>Auto step</span>
+          </label>
+          <label className="preview-check">
+            <input type="checkbox" checked={settings.randomMeters} onChange={(event) => update("randomMeters", event.target.checked)} />
+            <span>Random meters</span>
+          </label>
+          <label className="preview-check">
+            <input type="checkbox" checked={settings.forceGenerating} onChange={(event) => update("forceGenerating", event.target.checked)} />
+            <span>Force generation</span>
+          </label>
+          <label className="preview-check">
+            <input type="checkbox" checked={settings.forceError} onChange={(event) => update("forceError", event.target.checked)} />
+            <span>Force error</span>
+          </label>
+          <label className="preview-check">
+            <input type="checkbox" checked={settings.selectCurrentStep} onChange={(event) => update("selectCurrentStep", event.target.checked)} />
+            <span>Select current step</span>
+          </label>
+          <button className="preview-random" type="button" onClick={onRandomizeMeters}>
+            Randomize meters
+          </button>
+        </div>
+      </section>
+    </aside>
   );
 }
 
