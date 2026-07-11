@@ -97,6 +97,31 @@ summary:focus-visible {
   --right-column: var(--rail-width);
 }
 
+.app-shell.layout-studioDominant {
+  --left-column: minmax(16rem, 18rem);
+  --right-column: minmax(13rem, 16rem);
+}
+
+.app-shell.layout-performance {
+  --left-column: var(--rail-width);
+  --right-column: var(--rail-width);
+}
+
+.app-shell.layout-performance .chat-panel .logo-mark,
+.app-shell.layout-performance .chat-panel .sidebar-title,
+.app-shell.layout-performance .chat-panel .status-pill,
+.app-shell.layout-performance .chat-panel .sidebar-body,
+.app-shell.layout-performance .inspector .sidebar-title,
+.app-shell.layout-performance .inspector .inspector-content {
+  display: none;
+}
+
+.app-shell.layout-performance .brand-row,
+.app-shell.layout-performance .inspector-header {
+  justify-content: center;
+  padding-inline: 0.55rem;
+}
+
 .theme-warm {
   --mood: var(--amber);
 }
@@ -254,6 +279,11 @@ summary:focus-visible {
 .status-playing {
   border-color: rgba(255, 200, 87, 0.42);
   color: var(--amber);
+}
+
+.status-error {
+  border-color: rgba(255, 107, 95, 0.45);
+  color: var(--coral);
 }
 
 .status-playing .status-dot,
@@ -497,6 +527,67 @@ summary:focus-visible {
   padding: 0.9rem 1rem;
 }
 
+.preview-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: end;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 0.55rem 1rem;
+  background: color-mix(in srgb, var(--raised) 62%, var(--base));
+}
+
+.preview-controls label {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.preview-controls span {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preview-controls select,
+.preview-controls button {
+  min-height: 1.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.38rem;
+  color: var(--muted);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+}
+
+.preview-controls select {
+  padding-inline: 0.45rem;
+}
+
+.preview-controls button {
+  padding-inline: 0.65rem;
+}
+
+.preview-step {
+  min-width: 10rem;
+}
+
+.preview-step input {
+  accent-color: var(--amber);
+}
+
+.preview-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  min-height: 1.9rem;
+}
+
+.preview-check input {
+  accent-color: var(--cyan);
+}
+
 .meta-card {
   min-width: 0;
   border: 1px solid var(--line-soft);
@@ -627,6 +718,74 @@ summary:focus-visible {
   animation-delay: var(--bar-delay);
 }
 
+.visualizer.is-error {
+  border-color: rgba(255, 107, 95, 0.38);
+}
+
+.visualizer.is-error .eq-bars i,
+.visualizer.is-error .beat-pulse-grid i,
+.visualizer.is-error .visual-ruler i {
+  background: var(--coral);
+  opacity: 0.35;
+}
+
+.eq-bars.is-skyline {
+  align-items: center;
+}
+
+.eq-bars.is-skyline i {
+  border-radius: 999px;
+  transform: translateY(calc((100% - var(--bar-height)) / 10));
+}
+
+.eq-bars.is-shimmer i {
+  background: var(--cyan);
+  animation: shimmer 1.15s ease-in-out infinite;
+  animation-delay: var(--bar-delay);
+}
+
+.beat-pulse-grid,
+.visual-ruler {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 0.22rem;
+  height: 7.5rem;
+}
+
+.beat-pulse-grid i,
+.visual-ruler i {
+  border: 1px solid var(--line-soft);
+  border-radius: 0.32rem;
+  background: color-mix(in srgb, var(--lime) 18%, var(--raised));
+  opacity: 0.55;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.beat-pulse-grid i {
+  transform: scaleY(max(0.18, calc(var(--cell-level) / 100)));
+  transform-origin: bottom;
+}
+
+.beat-pulse-grid i.is-current,
+.visual-ruler i.is-current {
+  background: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(255, 200, 87, 0.7);
+  opacity: 1;
+}
+
+.visual-ruler {
+  align-items: stretch;
+  height: 3rem;
+}
+
+.visual-ruler i.is-beat {
+  background: color-mix(in srgb, var(--amber) 24%, var(--raised));
+}
+
 @keyframes shimmer {
   50% {
     opacity: 1;
@@ -644,6 +803,24 @@ summary:focus-visible {
   overflow-y: auto;
   padding: 0 1rem 1rem;
   scroll-behavior: smooth;
+}
+
+.track-grid.lane-variant-dense .track-row {
+  min-height: 5rem;
+}
+
+.track-grid.lane-variant-dense .lane-sampler,
+.track-grid.lane-variant-dense .lane-notes {
+  height: 2.25rem;
+}
+
+.track-grid.lane-variant-performance .track-row {
+  grid-template-columns: minmax(12rem, 14rem) minmax(36rem, 1fr);
+  min-height: 4.8rem;
+}
+
+.track-grid.lane-variant-performance .track-info {
+  padding: 0.55rem;
 }
 
 .track-toolbar {
@@ -758,6 +935,10 @@ summary:focus-visible {
 
 .track-row.is-muted {
   opacity: 0.48;
+}
+
+.track-row.is-selected {
+  border-color: color-mix(in srgb, var(--amber) 48%, var(--line));
 }
 
 .track-row.is-dragging {
@@ -974,10 +1155,21 @@ summary:focus-visible {
   background: color-mix(in srgb, var(--track-accent) 82%, var(--text));
 }
 
+.step-button.is-event-active,
+.note-block.is-event-active {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lime) 70%, transparent);
+}
+
 .step-button.is-active,
 .lane-notes > i.is-active {
   box-shadow: inset 0 0 0 2px var(--amber);
   background-color: rgba(255, 200, 87, 0.2);
+}
+
+.step-button.is-selected,
+.lane-notes > i.is-selected,
+.note-block.is-selected {
+  box-shadow: inset 0 0 0 2px var(--amber);
 }
 
 .lane-notes > i {

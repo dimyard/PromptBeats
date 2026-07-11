@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { compose, getCatalog } from "./api.js";
 import { listLibrary, getLibraryTrack, saveToLibrary } from "./library-api.js";
+import { deriveMusicUiState } from "./musicUiState.js";
 import { createPlayer } from "./player/index.js";
 import {
   addTrack,
@@ -51,10 +52,43 @@ const ROLE_LABELS = {
 
 const BAR_OPTIONS = [1, 2, 4, 8, 16, 32];
 const VISUAL_BARS = 40;
+const VISUALIZER_VARIANTS = ["eqBars", "beatPulse", "skyline", "ruler", "shimmer"];
+const LANE_VARIANTS = ["compact", "dense", "performance"];
+const LAYOUT_VARIANTS = ["classic3col", "studioDominant", "performance"];
+const STATE_PRESETS = ["live", "ready", "playing", "generating", "error"];
+const VARIANT_LABELS = {
+  eqBars: "EQ Bars",
+  beatPulse: "Beat Pulse",
+  skyline: "Skyline",
+  ruler: "Playhead Ruler",
+  shimmer: "Shimmer",
+  compact: "Compact",
+  dense: "Dense",
+  performance: "Performance",
+  classic3col: "Classic 3-col",
+  studioDominant: "Studio dominant",
+  live: "Live",
+  ready: "Ready",
+  playing: "Playing",
+  generating: "Generating",
+  error: "Error",
+};
 const DEFAULT_ADD_TRACK = {
   role: "lead",
   instrument: "synth",
   sound: "pluck",
+};
+const DEFAULT_PREVIEW_SETTINGS = {
+  visualizerVariant: "eqBars",
+  laneVariant: "compact",
+  layoutVariant: "classic3col",
+  statePreset: "live",
+  mockCurrentStep: 0,
+  mockAutoPlay: false,
+  randomMeters: false,
+  forceGenerating: false,
+  forceError: false,
+  selectCurrentStep: false,
 };
 
 function copySong(source) {
@@ -100,12 +134,25 @@ function formatSavedAt(iso) {
   });
 }
 
-function eventsAtStep(track, step) {
-  return (track.events ?? []).filter((event) => event.step === step);
-}
-
 function eventLabel(event) {
   return DRUM_NOTE_LABELS[event.note] ?? event.note;
+}
+
+function statusFromMusicState(musicState, song) {
+  if (musicState.generationState === "generating") return { label: "Генерация", kind: "loading" };
+  if (musicState.error) return { label: "Ошибка", kind: "error" };
+  if (musicState.playback.isPlaying) return { label: "Играет", kind: "playing" };
+  if (song) return { label: "Готово", kind: "ready" };
+  return { label: "Пусто", kind: "empty" };
+}
+
+function randomMeterMap(song) {
+  return Object.fromEntries((song?.tracks ?? []).map((track) => [track.id, Number((0.12 + Math.random() * 0.78).toFixed(2))]));
+}
+
+function isInteractiveTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("input, textarea, select, button, a, [contenteditable='true']"));
 }
 
 export default function App() {
@@ -141,6 +188,11 @@ export default function App() {
   const [pendingConflict, setPendingConflict] = useState(null); // { track } awaiting overwrite confirm
   const [duplicateOf, setDuplicateOf] = useState(null); // id of an existing track a save matched
   const [loadingId, setLoadingId] = useState(null); // library track currently loading
+  const [selectedTrackId, setSelectedTrackId] = useState("");
+  const [selectedEventStep, setSelectedEventStep] = useState(null);
+  const [previewSettings, setPreviewSettings] = useState(DEFAULT_PREVIEW_SETTINGS);
+  const [mockMeterLevels, setMockMeterLevels] = useState({});
+  const [designLabOpen, setDesignLabOpen] = useState(false);
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -149,47 +201,80 @@ export default function App() {
   const dragOpenedRef = useRef(false); // overlay was opened by a drag, not the button
   const importOpenRef = useRef(false); // latest importOpen for window listeners
 
-  const totalSteps = song ? getTotalSteps(song) : 16;
-  const status = busy ? "Генерация" : playing ? "Играет" : song ? "Готово" : "Пусто";
-  const statusKind = busy ? "loading" : playing ? "playing" : song ? "ready" : "empty";
+  const previewEnabled = import.meta.env.DEV;
+  const usesMockSignals = previewEnabled && previewSettings.statePreset !== "live";
   const mood = songMood(song);
   const draftSounds = soundsForInstrument(catalog, trackDraft.instrument);
+  const realErrorState = lastError
+    ? {
+        scope: "backend",
+        message: lastError,
+        recoverable: true,
+      }
+    : undefined;
+  const presetErrorState = {
+    scope: "backend",
+    message: "Recoverable preview error",
+    recoverable: true,
+  };
+  const forcedError = previewEnabled && (previewSettings.forceError || previewSettings.statePreset === "error");
+  const forcedGenerating = previewEnabled && (previewSettings.forceGenerating || previewSettings.statePreset === "generating");
+  const previewCurrentStep = usesMockSignals ? previewSettings.mockCurrentStep : step;
+  const previewIsPlaying = usesMockSignals ? previewSettings.statePreset === "playing" : playing;
+  const previewGenerationState = forcedError
+    ? "error"
+    : forcedGenerating
+      ? "generating"
+      : busy
+        ? "generating"
+        : previewSettings.statePreset === "ready"
+          ? "idle"
+          : previewSettings.statePreset === "playing"
+            ? "idle"
+            : lastError
+              ? "error"
+              : "idle";
+  const musicUiState = useMemo(
+    () =>
+      deriveMusicUiState(
+        song,
+        {
+          isPlaying: previewIsPlaying,
+          isLooping: true,
+          currentStep: previewCurrentStep,
+          generationState: previewGenerationState,
+          errorState: forcedError ? presetErrorState : realErrorState,
+        },
+        {
+          selectedTrackId,
+          selectedEventStep: previewSettings.selectCurrentStep ? previewCurrentStep : selectedEventStep,
+          meterLevelByTrack: previewEnabled && previewSettings.randomMeters ? mockMeterLevels : undefined,
+        },
+      ),
+    [
+      forcedError,
+      mockMeterLevels,
+      previewCurrentStep,
+      previewEnabled,
+      previewGenerationState,
+      previewIsPlaying,
+      previewSettings.randomMeters,
+      previewSettings.selectCurrentStep,
+      realErrorState,
+      selectedEventStep,
+      selectedTrackId,
+      song,
+    ],
+  );
+  const totalSteps = musicUiState.playback.totalSteps;
+  const statusSnapshot = statusFromMusicState(musicUiState, song);
+  const status = statusSnapshot.label;
+  const statusKind = statusSnapshot.kind;
 
   const songSummary = useMemo(() => {
     if (!song) return "Song JSON ещё не загружен";
     return `${song.title ?? "untitled"} · ${song.bpm} BPM · ${song.key ?? "no key"} · ${formatBars(song.bars)}`;
   }, [song]);
-
-  const activeSnapshot = useMemo(() => {
-    if (!song || !playing) return { energy: 0, tracks: [] };
-    const tracks = song.tracks
-      .map((track) => {
-        if (track.muted) return null;
-        const events = eventsAtStep(track, step);
-        if (!events.length) return null;
-        const velocity = events.reduce((sum, event) => sum + (event.vel ?? 0.8), 0) / events.length;
-        return {
-          id: track.id,
-          role: track.role,
-          label: ROLE_LABELS[track.role] ?? track.id,
-          energy: Math.min(1, velocity * (track.gain ?? 0.8)),
-        };
-      })
-      .filter(Boolean);
-    const energy = Math.min(1, tracks.reduce((sum, track) => sum + track.energy, 0));
-    return { energy, tracks };
-  }, [playing, song, step]);
-
-  const visualBars = useMemo(() => {
-    return Array.from({ length: VISUAL_BARS }, (_, index) => {
-      const phase = Math.sin((index + 1) * 1.73 + step * 0.51);
-      const centerBias = 1 - Math.abs(index - VISUAL_BARS / 2) / (VISUAL_BARS / 2) * 0.36;
-      const idle = 8 + Math.abs(phase) * 8;
-      const active = playing ? 18 + (Math.abs(phase) * 42 + activeSnapshot.energy * 38) * centerBias : idle;
-      const generating = busy ? 26 + Math.abs(Math.sin(index * 0.64 + Date.now() / 600)) * 42 : active;
-      return Math.min(96, generating);
-    });
-  }, [activeSnapshot.energy, busy, playing, step]);
 
   const validation = useMemo(() => {
     if (!song) return [];
@@ -258,8 +343,45 @@ export default function App() {
   }, [messages, busy]);
 
   useEffect(() => {
+    if (!previewEnabled || !previewSettings.mockAutoPlay || previewSettings.statePreset === "live") return undefined;
+    const intervalMs = Math.max(80, (60000 / musicUiState.playback.bpm) / 4);
+    const timer = window.setInterval(() => {
+      setPreviewSettings((current) => ({
+        ...current,
+        mockCurrentStep: (current.mockCurrentStep + 1) % Math.max(1, musicUiState.playback.totalSteps),
+      }));
+      if (previewSettings.randomMeters) setMockMeterLevels(randomMeterMap(song));
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [
+    musicUiState.playback.bpm,
+    musicUiState.playback.totalSteps,
+    previewEnabled,
+    previewSettings.mockAutoPlay,
+    previewSettings.randomMeters,
+    previewSettings.statePreset,
+    song,
+  ]);
+
+  useEffect(() => {
     importOpenRef.current = importOpen;
   }, [importOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.repeat || (event.code !== "Space" && event.key !== " ")) return;
+      if (isInteractiveTarget(event.target) || importOpen) return;
+      if (!song || busy) return;
+      event.preventDefault();
+      if (playing) {
+        stop();
+      } else {
+        play();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, importOpen, playing, song]);
 
   // Dragging a file anywhere over the app opens the (full-screen) import overlay;
   // a nested dragenter/dragleave counter closes it again if the file leaves
@@ -615,8 +737,10 @@ export default function App() {
 
   return (
     <main
-      className={`app-shell theme-${mood} ${leftCollapsed ? "is-left-collapsed" : ""} ${rightCollapsed ? "is-right-collapsed" : ""}`}
-      style={{ "--active-opacity": 0.45 + activeSnapshot.energy * 0.4 }}
+      className={`app-shell theme-${mood} layout-${previewEnabled ? previewSettings.layoutVariant : "classic3col"} ${leftCollapsed ? "is-left-collapsed" : ""} ${rightCollapsed ? "is-right-collapsed" : ""}`}
+      style={{
+        "--active-opacity": 0.45 + Math.min(1, musicUiState.tracks.reduce((sum, track) => sum + track.meterLevel, 0)) * 0.4,
+      }}
     >
       <section className="chat-panel" aria-label="Чат">
         <header className="brand-row">
@@ -701,6 +825,19 @@ export default function App() {
           </div>
 
           <div className="transport-actions" aria-label="Transport">
+            {previewEnabled && (
+              <button
+                className={`icon-button lab-toggle ${designLabOpen ? "is-on" : ""}`}
+                type="button"
+                onClick={() => setDesignLabOpen((value) => !value)}
+                title="Design Lab"
+                aria-label="Design Lab"
+                aria-expanded={designLabOpen}
+                aria-controls="design-lab-panel"
+              >
+                Lab
+              </button>
+            )}
             <button
               className={`icon-button secondary ${libraryOpen ? "is-on" : ""}`}
               type="button"
@@ -710,10 +847,10 @@ export default function App() {
             >
               ♫
             </button>
-            <button className={`icon-button play ${playing ? "is-on" : ""}`} type="button" onClick={play} disabled={!song || busy || playing} title="Play">
+            <button className={`icon-button play ${musicUiState.playback.isPlaying ? "is-on" : ""}`} type="button" onClick={play} disabled={!song || busy || musicUiState.playback.isPlaying} title="Play">
               ▶
             </button>
-            <button className="icon-button stop" type="button" onClick={stop} disabled={!song || !playing} title="Stop">
+            <button className="icon-button stop" type="button" onClick={stop} disabled={!song || (!playing && !musicUiState.playback.isPlaying)} title="Stop">
               ■
             </button>
           </div>
@@ -721,7 +858,7 @@ export default function App() {
 
         <div className="control-strip" aria-label="Ручные контролы песни">
           <BpmControl
-            value={song?.bpm ?? ""}
+            value={musicUiState.playback.bpm}
             disabled={!song || busy}
             onDec={() => applySongEdit((current) => setSongBpm(current, current.bpm - 1))}
             onInc={() => applySongEdit((current) => setSongBpm(current, current.bpm + 1))}
@@ -742,12 +879,12 @@ export default function App() {
             </select>
           </label>
           <MetaCard label="Key" value={song?.key ?? "-"} />
-          <MetaCard label="Step" value={song ? `${step + 1}/${totalSteps}` : "-"} />
+          <MetaCard label="Step" value={song ? `${musicUiState.playback.currentStep + 1}/${totalSteps}` : "-"} />
         </div>
 
-        <LiveVisualizer busy={busy} playing={playing} bars={visualBars} activeTracks={activeSnapshot.tracks} />
+        <LiveVisualizer musicState={musicUiState} variant={previewEnabled ? previewSettings.visualizerVariant : "eqBars"} />
 
-        <section className="track-grid" aria-label="Дорожки">
+        <section className={`track-grid lane-variant-${previewEnabled ? previewSettings.laneVariant : "compact"}`} aria-label="Дорожки">
           <div className="track-toolbar">
             <div>
               <p className="eyebrow">Tracks</p>
@@ -799,15 +936,18 @@ export default function App() {
             <TrackRow
               key={track.id}
               track={track}
+              trackActivity={musicUiState.tracks.find((item) => item.trackId === track.id)}
               totalSteps={totalSteps}
-              activeStep={step}
-              playing={playing}
+              activeStep={musicUiState.playback.currentStep}
+              selected={musicUiState.selectedTrackId === track.id}
+              selectedEventStep={musicUiState.selectedEventStep}
               busy={busy}
               catalog={catalog}
               selectedDrumNote={drumNotes[track.id] ?? "C2"}
               dragged={draggedTrackId === track.id}
               dropTarget={dropTargetTrackId === track.id && draggedTrackId !== track.id}
               onSelectedDrumNoteChange={(note) => setDrumNotes((current) => ({ ...current, [track.id]: note }))}
+              onSelectTrack={() => setSelectedTrackId(track.id)}
               onDragStart={(event) => {
                 setDraggedTrackId(track.id);
                 setDropTargetTrackId("");
@@ -840,7 +980,11 @@ export default function App() {
               }
               onGainChange={(gain) => applySongEdit((current) => setTrackGain(current, track.id, gain))}
               onSoundChange={(sound) => applySongEdit((current) => setTrackSound(current, track.id, sound, catalog), "Sound обновлён")}
-              onToggleDrumStep={(index, note) => applySongEdit((current) => toggleDrumStep(current, track.id, index, note))}
+              onToggleDrumStep={(index, note) => {
+                setSelectedTrackId(track.id);
+                setSelectedEventStep(index);
+                applySongEdit((current) => toggleDrumStep(current, track.id, index, note));
+              }}
             />
           ))}
           {!song && (
@@ -863,6 +1007,7 @@ export default function App() {
         onExportWav={exportWavFile}
         collapsed={rightCollapsed}
         onToggle={() => setRightCollapsed((value) => !value)}
+        musicState={musicUiState}
       />
 
       {libraryOpen && (
@@ -886,6 +1031,16 @@ export default function App() {
           }}
           onRefresh={refreshLibrary}
           onClose={closeLibrary}
+        />
+      )}
+
+      {previewEnabled && designLabOpen && (
+        <PreviewControls
+          settings={previewSettings}
+          musicState={musicUiState}
+          onChange={(patch) => setPreviewSettings((current) => ({ ...current, ...patch }))}
+          onRandomizeMeters={() => setMockMeterLevels(randomMeterMap(song))}
+          onClose={() => setDesignLabOpen(false)}
         />
       )}
 
@@ -1112,6 +1267,88 @@ function MetaCard({ label, value }) {
   );
 }
 
+function PreviewControls({ settings, musicState, onChange, onRandomizeMeters }) {
+  const update = (key, value) => onChange({ [key]: value });
+  return (
+    <section className="preview-controls" aria-label="Music reactive preview">
+      <label>
+        <span>visual</span>
+        <select value={settings.visualizerVariant} onChange={(event) => update("visualizerVariant", event.target.value)}>
+          {VISUALIZER_VARIANTS.map((variant) => (
+            <option value={variant} key={variant}>
+              {variant}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>lane</span>
+        <select value={settings.laneVariant} onChange={(event) => update("laneVariant", event.target.value)}>
+          {LANE_VARIANTS.map((variant) => (
+            <option value={variant} key={variant}>
+              {variant}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>layout</span>
+        <select value={settings.layoutVariant} onChange={(event) => update("layoutVariant", event.target.value)}>
+          {LAYOUT_VARIANTS.map((variant) => (
+            <option value={variant} key={variant}>
+              {variant}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>state</span>
+        <select value={settings.statePreset} onChange={(event) => update("statePreset", event.target.value)}>
+          {STATE_PRESETS.map((preset) => (
+            <option value={preset} key={preset}>
+              {preset}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="preview-step">
+        <span>step {musicState.playback.currentStep + 1}</span>
+        <input
+          type="range"
+          min="0"
+          max={Math.max(0, musicState.playback.totalSteps - 1)}
+          value={settings.mockCurrentStep}
+          onChange={(event) => update("mockCurrentStep", Number(event.target.value))}
+          disabled={settings.statePreset === "live"}
+        />
+      </label>
+      <label className="preview-check">
+        <input type="checkbox" checked={settings.mockAutoPlay} onChange={(event) => update("mockAutoPlay", event.target.checked)} />
+        <span>auto</span>
+      </label>
+      <label className="preview-check">
+        <input type="checkbox" checked={settings.randomMeters} onChange={(event) => update("randomMeters", event.target.checked)} />
+        <span>meters</span>
+      </label>
+      <button type="button" onClick={onRandomizeMeters}>
+        Random
+      </button>
+      <label className="preview-check">
+        <input type="checkbox" checked={settings.forceGenerating} onChange={(event) => update("forceGenerating", event.target.checked)} />
+        <span>gen</span>
+      </label>
+      <label className="preview-check">
+        <input type="checkbox" checked={settings.forceError} onChange={(event) => update("forceError", event.target.checked)} />
+        <span>error</span>
+      </label>
+      <label className="preview-check">
+        <input type="checkbox" checked={settings.selectCurrentStep} onChange={(event) => update("selectCurrentStep", event.target.checked)} />
+        <span>select</span>
+      </label>
+    </section>
+  );
+}
+
 function BpmControl({ value, disabled, onDec, onInc, onCommit }) {
   const [draft, setDraft] = useState(value === "" ? "" : String(value));
 
@@ -1166,38 +1403,78 @@ function BpmControl({ value, disabled, onDec, onInc, onCommit }) {
   );
 }
 
-function LiveVisualizer({ busy, playing, bars, activeTracks }) {
+function visualizerBars(musicState) {
+  const energy = Math.min(1, musicState.tracks.reduce((sum, track) => sum + track.meterLevel, 0));
+  return Array.from({ length: VISUAL_BARS }, (_, index) => {
+    const phase = Math.sin((index + 1) * 1.73 + musicState.playback.currentStep * 0.51);
+    const centerBias = 1 - Math.abs(index - VISUAL_BARS / 2) / (VISUAL_BARS / 2) * 0.36;
+    const idle = 8 + Math.abs(phase) * 8;
+    const active = musicState.playback.isPlaying ? 18 + (Math.abs(phase) * 42 + energy * 38) * centerBias : idle;
+    const generating = musicState.generationState === "generating" ? 26 + Math.abs(Math.sin(index * 0.64)) * 42 : active;
+    return Math.min(96, generating);
+  });
+}
+
+function LiveVisualizer({ musicState, variant }) {
+  const bars = visualizerBars(musicState);
+  const activeTracks = musicState.tracks
+    .filter((track) => track.meterLevel > 0.02)
+    .map((track) => ({ ...track, label: ROLE_LABELS[track.role] ?? track.trackId }));
+  const isGenerating = musicState.generationState === "generating";
+  const isError = Boolean(musicState.error);
+  const isPlaying = musicState.playback.isPlaying;
+  const beatIndex = musicState.playback.currentStep % musicState.playback.stepsPerBar;
+
   return (
-    <section className={`visualizer ${busy ? "is-generating" : ""} ${playing ? "is-playing" : ""}`} aria-label="Live output">
+    <section className={`visualizer variant-${variant} ${isGenerating ? "is-generating" : ""} ${isPlaying ? "is-playing" : ""} ${isError ? "is-error" : ""}`} aria-label="Live output">
       <header>
         <div>
           <p className="eyebrow">Live output</p>
-          <h3>{busy ? "Генерация" : playing ? "Играет" : "Ready"}</h3>
+          <h3>{isGenerating ? "Генерация" : isPlaying ? "Играет" : isError ? "Ошибка" : "Ready"}</h3>
         </div>
         <div className="active-track-list" aria-label="Активные дорожки">
-          {activeTracks.length ? activeTracks.slice(0, 4).map((track) => <span key={track.id}>{track.label}</span>) : <span>idle</span>}
+          {activeTracks.length ? activeTracks.slice(0, 4).map((track) => <span key={track.trackId}>{track.label}</span>) : <span>idle</span>}
         </div>
       </header>
-      <div className="eq-bars" aria-hidden="true">
-        {bars.map((height, index) => (
-          <i key={index} style={{ "--bar-height": `${height}%`, "--bar-delay": `${index * 18}ms` }} />
-        ))}
-      </div>
+      {variant === "beatPulse" && (
+        <div className="beat-pulse-grid" aria-hidden="true">
+          {Array.from({ length: musicState.playback.stepsPerBar }).map((_, index) => (
+            <i className={index === beatIndex ? "is-current" : ""} key={index} style={{ "--cell-level": `${bars[index % bars.length]}%` }} />
+          ))}
+        </div>
+      )}
+      {variant === "ruler" && (
+        <div className="visual-ruler" aria-hidden="true">
+          {Array.from({ length: musicState.playback.stepsPerBar }).map((_, index) => (
+            <i className={`${index % 4 === 0 ? "is-beat" : ""} ${index === beatIndex ? "is-current" : ""}`} key={index} />
+          ))}
+        </div>
+      )}
+      {variant !== "beatPulse" && variant !== "ruler" && (
+        <div className={`eq-bars ${variant === "skyline" ? "is-skyline" : ""} ${variant === "shimmer" ? "is-shimmer" : ""}`} aria-hidden="true">
+          {bars.map((height, index) => (
+            <i key={index} style={{ "--bar-height": `${height}%`, "--bar-delay": `${index * 18}ms` }} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 function TrackRow({
   track,
+  trackActivity,
   totalSteps,
   activeStep,
-  playing,
+  selected,
+  selectedEventStep,
   busy,
   catalog,
   selectedDrumNote,
   dragged,
   dropTarget,
   onSelectedDrumNoteChange,
+  onSelectTrack,
   onDragStart,
   onDragEnter,
   onDragOver,
@@ -1210,10 +1487,9 @@ function TrackRow({
 }) {
   const isSampler = track.instrument === "sampler";
   const sounds = soundsForInstrument(catalog, track.instrument);
-  const activeEvents = eventsAtStep(track, activeStep);
-  const energy = track.muted
-    ? 0
-    : Math.min(1, activeEvents.reduce((sum, event) => sum + (event.vel ?? 0.8), 0) * (track.gain ?? 0.8));
+  const activity = trackActivity ?? { activeEventSteps: [], meterLevel: 0, peakLevel: 0, muted: Boolean(track.muted) };
+  const activeEventSteps = new Set(activity.activeEventSteps ?? []);
+  const energy = activity.meterLevel ?? 0;
   const laneStyle = { "--steps": totalSteps, "--lane-min-width": `${totalSteps * 1.45}rem` };
   const eventsByStep = new Map();
   for (const event of track.events ?? []) {
@@ -1223,8 +1499,9 @@ function TrackRow({
 
   return (
     <article
-      className={`track-row role-${track.role} ${track.muted ? "is-muted" : ""} ${energy ? "is-hot" : ""} ${dragged ? "is-dragging" : ""} ${dropTarget ? "is-drop-target" : ""}`}
+      className={`track-row role-${track.role} ${activity.muted ? "is-muted" : ""} ${energy ? "is-hot" : ""} ${selected ? "is-selected" : ""} ${dragged ? "is-dragging" : ""} ${dropTarget ? "is-drop-target" : ""}`}
       style={{ "--meter-height": `${8 + energy * 92}%` }}
+      onPointerDown={onSelectTrack}
       onDragEnter={(event) => {
         event.stopPropagation();
         onDragEnter(event);
@@ -1261,7 +1538,7 @@ function TrackRow({
           <strong>{ROLE_LABELS[track.role] ?? track.role ?? track.id}</strong>
           <span>{track.id}</span>
         </div>
-        <button className={`track-toggle ${track.muted ? "is-on" : ""}`} type="button" onClick={onToggleMute} disabled={busy} aria-pressed={Boolean(track.muted)} title="Mute">
+        <button className={`track-toggle ${activity.muted ? "is-on" : ""}`} type="button" onClick={onToggleMute} disabled={busy} aria-pressed={Boolean(activity.muted)} title="Mute">
           M
         </button>
         <label className="sound-control">
@@ -1305,46 +1582,50 @@ function TrackRow({
       </div>
 
       {isSampler ? (
-        <div className="lane lane-sampler" style={laneStyle}>
-          {Array.from({ length: totalSteps }).map((_, index) => {
-            const events = eventsByStep.get(index) ?? [];
-            const label = events.map(eventLabel).slice(0, 2).join(" ");
-            return (
-              <button
-                className={`step-button ${events.length ? "has-event" : ""} ${index === activeStep ? "is-active" : ""}`}
-                key={index}
-                type="button"
-                disabled={busy}
-                onClick={() => onToggleDrumStep(index, selectedDrumNote)}
-                title={events.map((event) => `${event.note}, vel ${event.vel ?? 0.8}`).join("\n") || `Step ${index + 1}`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        <div className="lane">
+          <div className="lane-sampler" style={laneStyle}>
+            {Array.from({ length: totalSteps }).map((_, index) => {
+              const events = eventsByStep.get(index) ?? [];
+              const label = events.map(eventLabel).slice(0, 2).join(" ");
+              return (
+                <button
+                  className={`step-button ${events.length ? "has-event" : ""} ${activeEventSteps.has(index) ? "is-event-active" : ""} ${index === activeStep ? "is-active" : ""} ${selected && selectedEventStep === index ? "is-selected" : ""}`}
+                  key={index}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onToggleDrumStep(index, selectedDrumNote)}
+                  title={events.map((event) => `${event.note}, vel ${event.vel ?? 0.8}`).join("\n") || `Step ${index + 1}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        <div className="lane lane-notes" style={laneStyle}>
-          {Array.from({ length: totalSteps }).map((_, index) => (
-            <i className={index === activeStep ? "is-active" : ""} key={index} />
-          ))}
-          {(track.events ?? []).map((event, index) => {
-            const dur = event.dur ?? 1;
-            return (
-              <span
-                className="note-block"
-                key={`${event.step}-${event.note}-${index}`}
-                style={{
-                  "--left": `${(event.step / totalSteps) * 100}%`,
-                  "--width": `${(dur / totalSteps) * 100}%`,
-                  "--note-opacity": 0.38 + (event.vel ?? 0.8) * 0.62,
-                }}
-                title={`${event.note}, step ${event.step}, dur ${dur}, vel ${event.vel ?? 0.8}`}
-              >
-                {event.note}
-              </span>
-            );
-          })}
+        <div className="lane">
+          <div className="lane-notes" style={laneStyle}>
+            {Array.from({ length: totalSteps }).map((_, index) => (
+              <i className={`${index === activeStep ? "is-active" : ""} ${selected && selectedEventStep === index ? "is-selected" : ""}`} key={index} />
+            ))}
+            {(track.events ?? []).map((event, index) => {
+              const dur = event.dur ?? 1;
+              return (
+                <span
+                  className={`note-block ${activeEventSteps.has(event.step) ? "is-event-active" : ""} ${selected && selectedEventStep === event.step ? "is-selected" : ""}`}
+                  key={`${event.step}-${event.note}-${index}`}
+                  style={{
+                    "--left": `${(event.step / totalSteps) * 100}%`,
+                    "--width": `${(dur / totalSteps) * 100}%`,
+                    "--note-opacity": 0.38 + (event.vel ?? 0.8) * 0.62,
+                  }}
+                  title={`${event.note}, step ${event.step}, dur ${dur}, vel ${event.vel ?? 0.8}`}
+                >
+                  {event.note}
+                </span>
+              );
+            })}
+          </div>
         </div>
       )}
     </article>
@@ -1362,6 +1643,7 @@ function Inspector({
   onExportWav,
   collapsed,
   onToggle,
+  musicState,
 }) {
   return (
     <aside className={`inspector ${collapsed ? "is-collapsed" : ""}`} aria-label="Song inspector">
@@ -1390,6 +1672,7 @@ function Inspector({
             <Chip label="key" value={song?.key ?? "-"} />
             <Chip label="bars" value={song?.bars ?? "-"} />
             <Chip label="tracks" value={song?.tracks?.length ?? "-"} />
+            <Chip label="state" value={musicState.generationState} />
           </div>
         </section>
 
@@ -1424,6 +1707,20 @@ function Inspector({
   2,
 )}
           </pre>
+        </section>
+
+        <section className="inspector-section">
+          <p className="eyebrow">Runtime</p>
+          <div className="validation-list">
+            <span className={musicState.playback.isPlaying ? "is-ok" : "is-muted"}>
+              <i aria-hidden="true" />
+              step {musicState.playback.currentStep + 1}/{musicState.playback.totalSteps}
+            </span>
+            <span className={musicState.error ? "is-bad" : "is-ok"}>
+              <i aria-hidden="true" />
+              {musicState.error ? musicState.error.message : "no runtime error"}
+            </span>
+          </div>
         </section>
 
         <section className="inspector-section inspector-json">

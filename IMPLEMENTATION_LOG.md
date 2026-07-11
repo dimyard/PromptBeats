@@ -97,6 +97,21 @@
 - **Проверено:** `node --check`, `npm test` (32/32), `npm run build`; smoke-check дополнен серией live mixer edits.
 - **Известные баги / TODO:** browser smoke нужен для проверки плавности на реальном WebAudio устройстве.
 
+### 2026-07-11 · Music-reactive preview layer · A / UX-Front
+- **Что сделано:** вынесен общий `MusicUiState` contract в `deriveMusicUiState(currentSong, playerState, uiState)`.
+  Transport, visualizer, lanes и inspector теперь потребляют derived playback/activity/error/generation signals,
+  а dev-only preview panel переключает visualizer/lane/layout/state variants без изменения Song JSON.
+- **Где:** `frontend/src/musicUiState.js`, `frontend/test/musicUiState.test.mjs`, `frontend/src/App.jsx`,
+  `frontend/src/styles.css`.
+- **Публичный интерфейс:** `deriveMusicUiState(...)`; формат Song JSON и Player API не менялись.
+- **Как использовать:** в dev-режиме выбрать visual/lane/layout/state preset в панели над controls; загрузить «Пример»,
+  переключать variants и проверять один и тот же Song JSON через общий state contract.
+- **Отклонения от контракта:** нет; `pattern`/`notes` не используются.
+- **Проверено:** `npm test` (36/36), `npm run build`, browser smoke: sample загружается, variants переключаются без
+  console errors, lane scrollWidth > clientWidth для длинного лупа.
+- **Известные баги / TODO:** smoke пробела через in-app browser ограничен фокусным багом инструмента; handler добавлен
+  на `window` с guard для input/textarea/select/button.
+
 ### 2026-07-11 · UX: reorder дорожек, ручной BPM и горизонтальный скролл · A / UX-Front
 - **Что сделано:** добавлена ручка drag-and-drop для перестановки дорожек, подсветка drop-target и прямой ввод BPM
   с ограничением контракта `40..220` через существующий `setSongBpm`. Lane-сетки дорожек теперь прокручиваются
