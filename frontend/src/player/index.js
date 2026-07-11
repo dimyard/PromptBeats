@@ -42,8 +42,11 @@ export function createPlayer() {
 
   const emit = (ev, payload) => (listeners[ev] || []).forEach((cb) => cb(payload));
 
-  function teardown() {
-    if (stepEventId !== null) { Tone.Transport.clear(stepEventId); stepEventId = null; }
+  function teardown({ clearStepScheduler = false } = {}) {
+    if (clearStepScheduler && stepEventId !== null) {
+      Tone.Transport.clear(stepEventId);
+      stepEventId = null;
+    }
     parts.forEach((p) => p.dispose());
     voices.forEach((v) => v.dispose?.());
     parts = [];
@@ -71,10 +74,58 @@ export function createPlayer() {
     output.gain.setValueAtTime(value, now);
   }
 
+  function hasSameTrackAudioStructure(previousSong, nextSong) {
+    const previousTracks = previousSong?.tracks ?? [];
+    const nextTracks = nextSong?.tracks ?? [];
+    return previousTracks.length === nextTracks.length
+      && previousTracks.every((track, index) => {
+        const nextTrack = nextTracks[index];
+        return track.id === nextTrack.id
+          && track.instrument === nextTrack.instrument
+          && track.sound === nextTrack.sound
+          && JSON.stringify(track.events ?? []) === JSON.stringify(nextTrack.events ?? []);
+      });
+  }
+
+  function applyLiveMixerUpdate(song) {
+    const outputsByTrackId = new Map(trackOutputs.map((output) => [output.trackId, output]));
+    for (const track of song.tracks ?? []) {
+      const output = outputsByTrackId.get(track.id);
+      if (!output) return false;
+      const outputLevel = track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1);
+      output.outputLevel = outputLevel;
+      setOutputGain(output.gain, outputLevel, 0.01);
+    }
+    Tone.Transport.bpm.value = numberInRange(song?.bpm, DEFAULT_BPM, 40, MAX_BPM);
+    return true;
+  }
+
+  function ensureStepScheduler() {
+    if (stepEventId !== null) return;
+    stepEventId = Tone.Transport.scheduleRepeat((time) => {
+      Tone.Draw.schedule(() => {
+        const [b, q, s] = Tone.Transport.position.split(":").map(Number);
+        const step = ((b * 4 + q) * 4 + Math.floor(s)) % totalSteps;
+        emit("step", step);
+      }, time);
+    }, "16n");
+  }
+
   async function load(song) {
     try {
-      const wasPlaying = playing;
       const nextTotalSteps = safeSteps(song?.bars);
+      const canApplyLiveMixer = playing
+        && Tone.Transport.state === "started"
+        && nextTotalSteps === totalSteps
+        && hasSameTrackAudioStructure(lastSong, song);
+
+      if (canApplyLiveMixer && applyLiveMixerUpdate(song)) {
+        lastSong = song;
+        emit("ready", { totalSteps });
+        return;
+      }
+
+      const wasPlaying = playing;
       const preservePosition = wasPlaying
         && Tone.Transport.state === "started"
         && nextTotalSteps === totalSteps;
@@ -97,7 +148,7 @@ export function createPlayer() {
         const gain = new Tone.Gain(outputLevel);
         gain.connect(masterBus);
         voices.push(gain);
-        trackOutputs.push({ gain, outputLevel });
+        trackOutputs.push({ trackId: track.id, gain, outputLevel });
 
         let voice;
         const wantsKit = track.instrument === "sampler";
@@ -164,14 +215,7 @@ export function createPlayer() {
         parts.push(part);
       }
 
-      // playhead for UI
-      stepEventId = Tone.Transport.scheduleRepeat((time) => {
-        Tone.Draw.schedule(() => {
-          const [b, q, s] = Tone.Transport.position.split(":").map(Number);
-          const step = ((b * 4 + q) * 4 + Math.floor(s)) % totalSteps;
-          emit("step", step);
-        }, time);
-      }, "16n");
+      ensureStepScheduler();
 
       emit("ready", { totalSteps });
       if (wasPlaying && !preservePosition) await play();
@@ -283,7 +327,7 @@ export function createPlayer() {
     },
     dispose: () => {
       stop();
-      teardown();
+      teardown({ clearStepScheduler: true });
     },
     exportWav,
   };

@@ -249,6 +249,9 @@ player.on("step", (s) => setPlayhead(s));
   работали через правку Song JSON без отдельного Player API; `ready.totalSteps` после загрузки равен `bars * 16`.
 - При `load(song)` во время playback и неизменном `bars` Transport не сбрасывается: будущие события текущего лупа
   обновляются сразу, прошедшие ждут следующего лупа. Изменение `bars` перезапускает луп с позиции `0`.
+- Если между двумя Song меняются только `bpm`, `track.gain` и/или `track.muted`, Player обновляет существующие gain-ноды
+  без пересборки аудиографа. Scheduler события `step` живёт до `dispose()`, поэтому серия ручных правок не должна
+  останавливать визуальный playhead.
 - Работает в Chrome/Firefox/Safari через WebAudio (Web MIDI не нужен).
 - `exportWav(song?)` — офлайн-рендер (`Tone.Offline`) одного лупа в WAV. Длина = `bars * 4 * 60 / bpm` секунд
   (= `bars*16` шестнадцатых). Не трогает живой `Tone.Transport`/Destination — можно звать во время воспроизведения.

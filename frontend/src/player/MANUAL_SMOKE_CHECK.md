@@ -92,6 +92,20 @@ await player.load({
 });
 console.assert(player.isPlaying());
 console.log("new bass note scheduled for step", futureStep);
+
+// Mixer-only edits reuse the current audio graph: playhead and ringing notes
+// must not pause while gain/mute/BPM change repeatedly.
+await player.load({
+  ...song,
+  bpm: 96,
+  tracks: song.tracks.map((track) => ({ ...track, gain: 0.35 })),
+});
+await player.load({
+  ...song,
+  bpm: 104,
+  tracks: song.tracks.map((track) => ({ ...track, gain: 0.65 })),
+});
+console.assert(player.isPlaying());
 player.isPlaying();
 player.stop();
 player.isPlaying();
@@ -108,6 +122,7 @@ Expected results:
 - BPM, mute, and gain from the reloaded Song JSON take effect without adding Player methods.
 - With unchanged Bars, a running `load()` does not restart the playhead; a future edited step plays this loop,
   while a passed step waits for the next loop.
+- Repeated gain, mute, or BPM edits do not rebuild the audio graph or interrupt playback/playhead.
 - `steps.at(-1)` is `0` after `stop()`.
 
 ## WAV export (offline render)
