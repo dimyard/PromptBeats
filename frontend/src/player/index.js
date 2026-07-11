@@ -15,6 +15,7 @@ const stepToTime = (step) => {
 const DEFAULT_BPM = 120;
 const DEFAULT_BARS = 1;
 const DEFAULT_GAIN = 0.8;
+const STOP_FADE_SECONDS = 0.005;
 
 const numberInRange = (value, fallback, min, max) => {
   const number = Number(value);
@@ -26,6 +27,7 @@ const safeSteps = (bars) => Math.max(16, Math.floor(numberInRange(bars, DEFAULT_
 export function createPlayer() {
   let parts = [];
   let voices = [];
+  let trackOutputs = [];
   let stepEventId = null;
   let totalSteps = 16;
   let playing = false;
@@ -39,6 +41,17 @@ export function createPlayer() {
     voices.forEach((v) => v.dispose?.());
     parts = [];
     voices = [];
+    trackOutputs = [];
+  }
+
+  function setOutputGain(output, value, rampSeconds = 0) {
+    const now = Tone.now();
+    output.gain.cancelScheduledValues(now);
+    if (rampSeconds) {
+      output.gain.linearRampToValueAtTime(value, now + rampSeconds);
+      return;
+    }
+    output.gain.setValueAtTime(value, now);
   }
 
   async function load(song) {
@@ -54,8 +67,10 @@ export function createPlayer() {
       Tone.Transport.loopEnd = `${totalSteps / 16}:0:0`;
 
       for (const track of song?.tracks ?? []) {
-        const gain = new Tone.Gain(track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1)).toDestination();
+        const outputLevel = track.muted ? 0 : numberInRange(track.gain, DEFAULT_GAIN, 0, 1);
+        const gain = new Tone.Gain(outputLevel).toDestination();
         voices.push(gain);
+        trackOutputs.push({ gain, outputLevel });
 
         let voice;
         const wantsKit = track.instrument === "sampler";
@@ -136,12 +151,14 @@ export function createPlayer() {
 
   async function play() {
     await Tone.start(); // requires a user gesture the first time
+    trackOutputs.forEach(({ gain, outputLevel }) => setOutputGain(gain, outputLevel));
     Tone.Transport.start();
     playing = true;
   }
 
   function stop() {
     Tone.Transport.stop();
+    trackOutputs.forEach(({ gain }) => setOutputGain(gain, 0, STOP_FADE_SECONDS));
     Tone.Transport.position = 0;
     playing = false;
     emit("step", 0);
