@@ -54,6 +54,18 @@
   compose generate/edit зелёные; player/App парсятся (esbuild). Пофикшена TDZ-коллизия `song` в compose.js.
 - **Известные баги / TODO:** без изменений (B: реальный LLM; C: сэмпл-киты/exportWav; A: полировка UI).
 
+### 2026-07-11 · UX/UI-ресерч и Claude Design prompt · A / UX-Front
+- **Что сделано:** подготовлены русскоязычные материалы для роли A: UX/UI-ресерч, дизайн-направление, layout,
+  состояния интерфейса, демо-нарратив и готовый промпт для Claude Design.
+- **Где:** `docs/design/DESIGN_RESEARCH.md`, `docs/design/CLAUDE_DESIGN_PROMPT.md`.
+- **Публичный интерфейс:** нет изменений в кодовых контрактах; материалы описывают ожидаемый UX вокруг
+  существующих `Song JSON`, `/api/compose` и `createPlayer()`.
+- **Как использовать:** открыть `docs/design/CLAUDE_DESIGN_PROMPT.md`, передать текст в Claude Design и использовать
+  результат как ориентир для полировки `frontend/`. Детали обоснования и референсы — в `docs/design/DESIGN_RESEARCH.md`.
+- **Отклонения от контракта:** нет.
+- **Известные баги / TODO:** после получения макета сверить его с текущим `frontend/src/App.jsx` и решить, что реально
+  успеваем внедрить за оставшееся время.
+
 ### 2026-07-11 · Скелет проекта (backend + frontend + player) · setup
 - **Что сделано:** рабочий end-to-end каркас по контрактам. Запускается на заглушке LLM.
 - **Где:** `backend/` (server/compose/validate/llm/catalog), `frontend/` (Vite+React, `src/App.jsx`, `src/api.js`),
