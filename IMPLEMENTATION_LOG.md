@@ -39,6 +39,24 @@
 
 ## Записи
 
+### 2026-07-11 · Hardening-пасс бэкенда B — реализовано · B
+- **Что сделано:** выполнен анонсированный ниже пасс (надёжность/защиты/DX/качество LLM). Всё за env-флагами,
+  дефолты сохраняют прежнее поведение; контракт `/api/compose` и Song JSON не менялись.
+  - **Надёжность:** таймаут `LLM_TIMEOUT_MS` (30s, fail-fast); ретрай транзиентных 429/5xx/сеть с backoff и `Retry-After`
+    (модуль `retry.js`, отдельно от валидационного ретрая); детект обрезания (`max_tokens`) → чёткая ошибка; `LLM_MAX_TOKENS` конфиг.
+  - **Защиты:** `MAX_PROMPT_CHARS`/`MAX_SONG_CHARS` → `400`; санитизация ошибок клиенту (полный текст — только в лог сервера);
+    opt-in rate-limit (`RATE_LIMIT_ENABLED` → `rate_limited`/429, модуль `ratelimit.js`).
+  - **DX:** `GET /api/health`; fail-fast конфига на старте + summary-лог; лог-строка на запрос (mode/provider/model/латентность/исход).
+  - **Качество LLM:** `LLM_TEMPERATURE=0.4`; `normalizeSong` дропает события со `step` вне лупа и дедупит `id` (со счётчиками в лог).
+- **Где:** новые `backend/src/retry.js`, `backend/src/ratelimit.js`; правки `backend/src/{providers,server,validate,compose}.js`;
+  `backend/.env.example`; тесты `backend/test/*.test.mjs` + `npm test`.
+- **Публичный интерфейс:** без несовместимых изменений. Аддитивно: `GET /api/health` + опц. `rate_limited`/429 (см. `CONTRACTS.md`).
+- **Как использовать:** `cd backend && npm test` (14 тестов). Тюнинг — новые env в `.env.example`. Дефолты = прежнее поведение.
+- **Отклонения от контракта:** нет. Аддитивные пометки уже в `CONTRACTS.md`.
+- **Проверено:** `npm test` 14/14 зелёные; HTTP-смоук (mock): health-shape, лимиты→`400`, rate-limit→`429`, fail-fast→exit 1;
+  боевой Anthropic через прокси — валидный Song (128 BPM, ~4s).
+- **Известные баги / TODO:** таймаут не ограничивает чтение тела ответа (только установление/заголовки); rate-limit in-memory (один процесс).
+
 ### 2026-07-11 · Windows fix для one-command launcher · Codex
 - **Что сделано:** исправлен `spawn EINVAL` при `npm run dev` в Windows PowerShell. Launcher теперь запускает `npm`
   через shell на Windows и корректно останавливает второй dev-сервер, если первый не стартовал или завершился.
