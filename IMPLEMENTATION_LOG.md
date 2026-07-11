@@ -16,8 +16,8 @@
 | Бэк `/api/compose` | B | ✅ готов | `POST /api/compose`, `GET /api/catalog` | `backend/` |
 | LLM-промт + валидатор | B | ✅ готов (multi-provider + few-shot + proxy) | `backend/src/llm.js`, `backend/src/providers.js` | `backend/` |
 | Player (Tone.js) | C | ✅ engine + sampler готовы | `createPlayer()` | `frontend/src/player/` |
-| Чат-UI + состояние | A | 🟡 рабочий базовый | — | `frontend/` |
-| Грид дорожек | A | 🟡 базовый | — | `frontend/src/App.jsx` |
+| Чат-UI + состояние | A | ✅ stage 3 demo-ready | — | `frontend/` |
+| Грид дорожек + ручные контролы | A | ✅ stage 3 demo-ready | Song JSON → `player.load(song)` | `frontend/src/App.jsx`, `frontend/src/songEditing.js` |
 | Импорт/экспорт проекта | A | 🟡 запланирован (анонс) | `song-io.js` (serialize/parse/validate) | `frontend/src/song-io.js` |
 | Экспорт WAV (растяжка) | C | 🟡 запланирован (анонс) | `player.exportWav(song?)` | `frontend/src/player/` |
 
@@ -39,6 +39,21 @@
 ---
 
 ## Записи
+
+### 2026-07-11 · Этап 3 фронта: studio UI и ручные контролы · A / UX-Front
+- **Что сделано:** реализован stage 3 UI по дизайн-системе: трёхзонный shell chat/studio/inspector, live visualizer,
+  track lanes, Song JSON inspector, BPM stepper, Bars selector с нормализацией, mute/gain/sound controls и drum step
+  toggle через `track.events`. Добавлен subtle beat-reactive visual layer: active step, meters, lane glow и equalizer
+  реагируют на `player.on("step")`, `track.events`, `vel`, `gain` и `muted`.
+- **Где:** `frontend/src/App.jsx`, `frontend/src/styles.css`, `frontend/src/songEditing.js`,
+  `frontend/test/songEditing.test.mjs`, `frontend/package.json`.
+- **Публичный интерфейс:** контракты не менялись; ручные правки идут через обновление `currentSong` и повторный
+  `player.load(updatedSong)`.
+- **Как использовать:** `cd frontend && npm run dev`; загрузить «Пример» или отправить prompt, затем менять BPM/Bars,
+  mute/gain/sound и кликом переключать drum steps в sampler-дорожках.
+- **Отклонения от контракта:** нет; `key` остаётся read-only, как описано в brief A.
+- **Проверено:** `cd frontend && npm test` (5/5), `cd frontend && npm run build`.
+- **Известные баги / TODO:** synth-note editing пока только визуализация note blocks; Export WAV остаётся disabled/stretch.
 
 ### 2026-07-11 · [АНОНС] Импорт/экспорт проекта + сохранение аудио (запланировано, код ещё не влит) · A/C
 - **Что будет сделано:** перенос трека наружу и обратно + рендер итогового микса в файл. Форма Song JSON, HTTP API и
@@ -65,6 +80,7 @@
 - **Известные баги / TODO (заранее):** release-хвосты синтов на границе лупа обрезаются в WAV (рендерим ровно один луп
   для бесшовности); импорт/экспорт — целый проект, не отдельные дорожки; только WAV (MP3/OGG вне scope). По завершении
   добавлю запись «сделано».
+
 ### 2026-07-11 · Master limiter и контрактные ошибки Player · C
 - **Что сделано:** все дорожки теперь проходят через общий master gain и limiter перед `Tone.Destination`, чтобы
   плотные аранжировки не клиппили. Несовпадение synth-дорожки с kit sound теперь эмитит допустимый контрактом
