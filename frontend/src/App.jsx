@@ -116,6 +116,8 @@ export default function App() {
   const [importError, setImportError] = useState("");
   const [importState, setImportState] = useState("idle"); // idle|dragover|parsing|success|error
   const [rendering, setRendering] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const playerRef = useRef(null);
   const logRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -499,13 +501,16 @@ export default function App() {
   }
 
   return (
-    <main className={`app-shell theme-${mood}`} style={{ "--active-opacity": 0.45 + activeSnapshot.energy * 0.4 }}>
+    <main
+      className={`app-shell theme-${mood} ${leftCollapsed ? "is-left-collapsed" : ""} ${rightCollapsed ? "is-right-collapsed" : ""}`}
+      style={{ "--active-opacity": 0.45 + activeSnapshot.energy * 0.4 }}
+    >
       <section className="chat-panel" aria-label="Чат">
         <header className="brand-row">
           <div className="logo-mark" aria-hidden="true">
             PB
           </div>
-          <div>
+          <div className="sidebar-title">
             <p className="eyebrow">AI beat sketcher</p>
             <h1>PromptBeats</h1>
           </div>
@@ -513,9 +518,18 @@ export default function App() {
             <span className="status-dot" aria-hidden="true" />
             {status}
           </span>
+          <button
+            className="sidebar-toggle"
+            type="button"
+            onClick={() => setLeftCollapsed((value) => !value)}
+            aria-label={leftCollapsed ? "Показать чат" : "Скрыть чат"}
+            title={leftCollapsed ? "Показать чат" : "Скрыть чат"}
+          >
+            {leftCollapsed ? "›" : "‹"}
+          </button>
         </header>
 
-        <div className="message-log" ref={logRef}>
+        <div className="message-log sidebar-body" ref={logRef}>
           {messages.map((message) => (
             <article className={`message message-${message.role}`} key={message.id}>
               <span className="message-author">
@@ -536,7 +550,7 @@ export default function App() {
           )}
         </div>
 
-        <div className="prompt-area">
+        <div className="prompt-area sidebar-body">
           <div className="prompt-chips" aria-label="Демо-промпты">
             {DEMO_PROMPTS.map((prompt) => (
               <button type="button" key={prompt} onClick={() => send(prompt)} disabled={busy}>
@@ -693,6 +707,8 @@ export default function App() {
         onImport={openImport}
         onExportJson={exportJson}
         onExportWav={exportWavFile}
+        collapsed={rightCollapsed}
+        onToggle={() => setRightCollapsed((value) => !value)}
       />
 
       {importOpen && (
@@ -935,42 +951,70 @@ function TrackRow({
   );
 }
 
-function Inspector({ song, validation, lastPrompt, lastError, rendering, onImport, onExportJson, onExportWav }) {
+function Inspector({
+  song,
+  validation,
+  lastPrompt,
+  lastError,
+  rendering,
+  onImport,
+  onExportJson,
+  onExportWav,
+  collapsed,
+  onToggle,
+}) {
   return (
-    <aside className="inspector" aria-label="Song inspector">
-      <section className="inspector-section">
-        <p className="eyebrow">Song JSON</p>
-        <div className="kv-chips">
-          <Chip label="version" value={song?.version ?? "-"} />
-          <Chip label="bpm" value={song?.bpm ?? "-"} />
-          <Chip label="key" value={song?.key ?? "-"} />
-          <Chip label="bars" value={song?.bars ?? "-"} />
-          <Chip label="tracks" value={song?.tracks?.length ?? "-"} />
+    <aside className={`inspector ${collapsed ? "is-collapsed" : ""}`} aria-label="Song inspector">
+      <header className="inspector-header">
+        <div className="sidebar-title">
+          <p className="eyebrow">Inspector</p>
+          <h2>Song JSON</h2>
         </div>
-      </section>
+        <button
+          className="sidebar-toggle"
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? "Показать инспектор" : "Скрыть инспектор"}
+          title={collapsed ? "Показать инспектор" : "Скрыть инспектор"}
+        >
+          {collapsed ? "‹" : "›"}
+        </button>
+      </header>
 
-      <section className="inspector-section">
-        <p className="eyebrow">Validation</p>
-        <div className="validation-list">
-          {validation.length ? (
-            validation.map((item) => (
-              <span className={item.ok ? "is-ok" : "is-bad"} key={item.label}>
+      <div className="inspector-content">
+        <section className="inspector-section">
+          <p className="eyebrow">Song JSON</p>
+          <div className="kv-chips">
+            <Chip label="version" value={song?.version ?? "-"} />
+            <Chip label="bpm" value={song?.bpm ?? "-"} />
+            <Chip label="key" value={song?.key ?? "-"} />
+            <Chip label="bars" value={song?.bars ?? "-"} />
+            <Chip label="tracks" value={song?.tracks?.length ?? "-"} />
+          </div>
+        </section>
+
+        <section className="inspector-section">
+          <p className="eyebrow">Validation</p>
+          <div className="validation-list">
+            {validation.length ? (
+              validation.map((item) => (
+                <span className={item.ok ? "is-ok" : "is-bad"} key={item.label}>
+                  <i aria-hidden="true" />
+                  {item.label}
+                </span>
+              ))
+            ) : (
+              <span className="is-muted">
                 <i aria-hidden="true" />
-                {item.label}
+                waiting for song
               </span>
-            ))
-          ) : (
-            <span className="is-muted">
-              <i aria-hidden="true" />
-              waiting for song
-            </span>
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </section>
 
-      <section className="inspector-section">
-        <p className="eyebrow">Request payload</p>
-        <pre className="payload-preview">
+        <section className="inspector-section">
+          <p className="eyebrow">Request payload</p>
+          <pre className="payload-preview">
 {JSON.stringify(
   {
     prompt: lastPrompt || null,
@@ -979,36 +1023,37 @@ function Inspector({ song, validation, lastPrompt, lastError, rendering, onImpor
   null,
   2,
 )}
-        </pre>
-      </section>
+          </pre>
+        </section>
 
-      <section className="inspector-section inspector-json">
-        <details open>
-          <summary>JSON preview</summary>
-          <pre>{song ? JSON.stringify(song, null, 2) : "null"}</pre>
-        </details>
-      </section>
+        <section className="inspector-section inspector-json">
+          <details open>
+            <summary>JSON preview</summary>
+            <pre>{song ? JSON.stringify(song, null, 2) : "null"}</pre>
+          </details>
+        </section>
 
-      <section className="inspector-section">
-        <p className="eyebrow">Импорт / экспорт</p>
-        <div className="export-actions">
-          <button className="export-button" type="button" onClick={onImport}>
-            Импорт трека
-          </button>
-          <button className="export-button" type="button" onClick={onExportJson} disabled={!song}>
-            Экспорт JSON
-          </button>
-          <button
-            className={`export-button ${rendering ? "is-rendering" : ""}`}
-            type="button"
-            onClick={onExportWav}
-            disabled={!song || rendering}
-          >
-            {rendering ? "Рендер…" : "Сохранить WAV"}
-          </button>
-        </div>
-        {lastError && <p className="last-error">{lastError}</p>}
-      </section>
+        <section className="inspector-section">
+          <p className="eyebrow">Импорт / экспорт</p>
+          <div className="export-actions">
+            <button className="export-button" type="button" onClick={onImport}>
+              Импорт трека
+            </button>
+            <button className="export-button" type="button" onClick={onExportJson} disabled={!song}>
+              Экспорт JSON
+            </button>
+            <button
+              className={`export-button ${rendering ? "is-rendering" : ""}`}
+              type="button"
+              onClick={onExportWav}
+              disabled={!song || rendering}
+            >
+              {rendering ? "Рендер…" : "Сохранить WAV"}
+            </button>
+          </div>
+          {lastError && <p className="last-error">{lastError}</p>}
+        </section>
+      </div>
     </aside>
   );
 }

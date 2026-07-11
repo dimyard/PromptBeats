@@ -75,13 +75,26 @@ summary:focus-visible {
 
 .app-shell {
   --mood: var(--lime);
+  --topbar-height: 4.75rem;
+  --rail-width: 3.25rem;
+  --left-column: minmax(20rem, 23.5rem);
+  --right-column: minmax(17rem, 20rem);
   display: grid;
-  grid-template-columns: minmax(20rem, 23.5rem) minmax(32rem, 1fr) minmax(17rem, 20rem);
+  grid-template-columns: var(--left-column) minmax(32rem, 1fr) var(--right-column);
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
   background: var(--base);
   color: var(--text);
+  transition: grid-template-columns 180ms ease;
+}
+
+.app-shell.is-left-collapsed {
+  --left-column: var(--rail-width);
+}
+
+.app-shell.is-right-collapsed {
+  --right-column: var(--rail-width);
 }
 
 .theme-warm {
@@ -111,13 +124,55 @@ summary:focus-visible {
 }
 
 .brand-row,
-.transport {
+.transport,
+.inspector-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  min-height: 4rem;
-  padding: 0.9rem 1rem;
+  min-height: var(--topbar-height);
+  height: var(--topbar-height);
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.sidebar-title {
+  min-width: 0;
+}
+
+.sidebar-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--muted);
+  background: var(--raised);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.sidebar-toggle:hover {
+  border-color: color-mix(in srgb, var(--mood) 48%, var(--line));
+  color: var(--text);
+}
+
+.is-left-collapsed .brand-row {
+  justify-content: center;
+  padding-inline: 0.55rem;
+}
+
+.is-left-collapsed .chat-panel .logo-mark,
+.is-left-collapsed .chat-panel .sidebar-title,
+.is-left-collapsed .chat-panel .status-pill,
+.is-left-collapsed .chat-panel .sidebar-body {
+  display: none;
 }
 
 .logo-mark {
@@ -137,6 +192,7 @@ summary:focus-visible {
 
 .brand-row h1,
 .transport h2,
+.inspector h2,
 .visualizer h3 {
   margin: 0;
   letter-spacing: 0;
@@ -147,6 +203,7 @@ summary:focus-visible {
 }
 
 .transport h2,
+.inspector h2,
 .visualizer h3 {
   font-size: 1rem;
 }
@@ -907,9 +964,32 @@ summary:focus-visible {
 .inspector {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   border-left: 1px solid var(--line-soft);
   background: var(--panel);
+}
+
+.inspector-header {
+  justify-content: space-between;
+  background: var(--panel);
+}
+
+.inspector-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.inspector.is-collapsed .sidebar-title,
+.inspector.is-collapsed .inspector-content {
+  display: none;
+}
+
+.inspector.is-collapsed .inspector-header {
+  justify-content: center;
+  padding-inline: 0.55rem;
 }
 
 .inspector-section {
@@ -1036,7 +1116,13 @@ summary:focus-visible {
 
 @media (max-width: 1180px) {
   .app-shell {
-    grid-template-columns: minmax(19rem, 22rem) minmax(30rem, 1fr);
+    --left-column: minmax(19rem, 22rem);
+    --right-column: 1fr;
+    grid-template-columns: var(--left-column) minmax(30rem, 1fr);
+  }
+
+  .app-shell.is-left-collapsed {
+    --left-column: var(--rail-width);
   }
 
   .inspector {
@@ -1044,6 +1130,10 @@ summary:focus-visible {
     max-height: 20rem;
     border-top: 1px solid var(--line-soft);
     border-left: 0;
+  }
+
+  .inspector.is-collapsed {
+    max-height: var(--topbar-height);
   }
 }
 
@@ -1059,6 +1149,10 @@ summary:focus-visible {
     min-height: 34rem;
     border-right: 0;
     border-bottom: 1px solid var(--line-soft);
+  }
+
+  .app-shell.is-left-collapsed .chat-panel {
+    min-height: var(--topbar-height);
   }
 
   .control-strip {
@@ -1085,11 +1179,14 @@ summary:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .brand-row,
   .transport,
   .visualizer header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .transport {
+    height: auto;
   }
 
   .status-pill {
