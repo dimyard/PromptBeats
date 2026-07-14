@@ -3,7 +3,7 @@
 export const CATALOG = {
   synths: [
     "sine_bass", "saw_lead", "square_lead", "soft_pad", "pluck", "fm_bell",
-    "warm_keys", "acid_bass", "organ", "wide_pad",
+    "warm_keys", "soft_piano", "acid_bass", "organ", "wide_pad",
   ],
   kits: ["lofi_kit", "house_kit", "trap_kit", "boom_bap_kit", "techno_kit"],
   roles: ["drums", "bass", "chords", "lead", "pad", "fx"],
@@ -21,6 +21,7 @@ export const SOUND_DESCRIPTIONS = Object.freeze({
   pluck: "короткий щипковый звук для стэбов",
   fm_bell: "звонкий FM-колокольчик",
   warm_keys: "тёплые полифонические клавиши",
+  soft_piano: "мягкое читаемое пианино для хуков и аккордов",
   acid_bass: "резкий резонансный acid-бас",
   organ: "полифонический орган",
   wide_pad: "широкий воздушный стерео-пэд",

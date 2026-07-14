@@ -46,6 +46,9 @@ function numEnv(name, def) {
 }
 const maxTokens = () => numEnv("LLM_MAX_TOKENS", 4096);
 const temperature = () => numEnv("LLM_TEMPERATURE", 0.4);
+const openAIChatCompletionsUrl = () =>
+  process.env.OPENAI_CHAT_COMPLETIONS_URL ||
+  "https://api.openai.com/v1/chat/completions";
 
 // --- Proxy (opt-in) ---------------------------------------------------------
 // Resolved once, lazily, and reused (connection pooling). Env is read on the
@@ -166,7 +169,7 @@ async function callAnthropic({ system, messages, model }) {
 
 // --- OpenAI (Chat Completions, JSON mode) ----------------------------------
 async function callOpenAI({ system, messages, model }) {
-  const res = await llmFetch("https://api.openai.com/v1/chat/completions", {
+  const res = await llmFetch(openAIChatCompletionsUrl(), {
     method: "POST",
     headers: {
       "content-type": "application/json",

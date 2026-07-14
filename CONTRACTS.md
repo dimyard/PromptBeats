@@ -80,7 +80,7 @@
 
 ### Каталог звуков (enum для поля `sound`)
 Синты (без ассетов, чистый Tone.js): `sine_bass`, `saw_lead`, `square_lead`, `soft_pad`, `pluck`, `fm_bell`,
-`warm_keys`, `acid_bass`, `organ`, `wide_pad`.
+`warm_keys`, `soft_piano`, `acid_bass`, `organ`, `wide_pad`.
 Сэмпл-киты (синтезированные в браузере): `lofi_kit`, `house_kit`, `trap_kit`, `boom_bap_kit`, `techno_kit`.
 
 LLM обязан выбирать `sound` только из этого списка. Бэк это валидирует.

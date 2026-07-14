@@ -21,6 +21,7 @@ export const SYNTH_SOUNDS = Object.freeze([
   "pluck",
   "fm_bell",
   "warm_keys",
+  "soft_piano",
   "acid_bass",
   "organ",
   "wide_pad",
@@ -45,6 +46,30 @@ const normalizeDrumNote = (note) => {
   if (typeof note !== "string") return "";
   return note.length > 0 ? `${note[0].toUpperCase()}${note.slice(1)}` : "";
 };
+
+function makePolyPluck() {
+  const voices = Array.from({ length: 8 }, () => new Tone.PluckSynth({
+    attackNoise: 1.1,
+    dampening: 3800,
+    resonance: 0.78,
+  }));
+  let voiceIndex = 0;
+
+  return {
+    connect(output) {
+      voices.forEach((voice) => voice.connect(output));
+      return this;
+    },
+    triggerAttackRelease(note, duration, time, velocity) {
+      const voice = voices[voiceIndex % voices.length];
+      voiceIndex += 1;
+      voice.triggerAttackRelease(note, duration, time, velocity);
+    },
+    dispose() {
+      voices.forEach((voice) => voice.dispose());
+    },
+  };
+}
 
 /** Build a pitched synth voice. Returns null for an unknown catalog sound. */
 export function makeSynth(sound) {
@@ -72,7 +97,7 @@ export function makeSynth(sound) {
         envelope: { attack: 0.45, decay: 0.25, sustain: 0.72, release: 1.7 },
       });
     case "pluck":
-      return new Tone.PluckSynth({ attackNoise: 1.1, dampening: 3800, resonance: 0.78 });
+      return makePolyPluck();
     case "fm_bell":
       return new Tone.FMSynth({
         harmonicity: 3.01,
@@ -86,6 +111,11 @@ export function makeSynth(sound) {
       return new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "triangle8" },
         envelope: { attack: 0.018, decay: 0.3, sustain: 0.48, release: 1.1 },
+      });
+    case "soft_piano":
+      return new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.006, decay: 0.42, sustain: 0.18, release: 0.9 },
       });
     case "acid_bass":
       return new Tone.MonoSynth({
