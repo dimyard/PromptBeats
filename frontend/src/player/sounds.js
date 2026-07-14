@@ -1,5 +1,6 @@
 // Instrument registry. Owner: Human C.
-// Voices are synthesized so every kit works without fetching external samples.
+// Drum kits and synths are built in. sampled_piano may use optional local samples
+// from /samples/piano; it falls back to soft_piano while samples are unavailable.
 import * as Tone from "tone";
 
 // note -> drum piece (mirrors the drum map in ../../../CONTRACTS.md)
@@ -22,6 +23,7 @@ export const SYNTH_SOUNDS = Object.freeze([
   "fm_bell",
   "warm_keys",
   "soft_piano",
+  "sampled_piano",
   "acid_bass",
   "organ",
   "wide_pad",
@@ -47,6 +49,13 @@ const normalizeDrumNote = (note) => {
   return note.length > 0 ? `${note[0].toUpperCase()}${note.slice(1)}` : "";
 };
 
+function makeSoftPiano() {
+  return new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.006, decay: 0.42, sustain: 0.18, release: 0.9 },
+  });
+}
+
 function makePolyPluck() {
   const voices = Array.from({ length: 8 }, () => new Tone.PluckSynth({
     attackNoise: 1.1,
@@ -67,6 +76,48 @@ function makePolyPluck() {
     },
     dispose() {
       voices.forEach((voice) => voice.dispose());
+    },
+  };
+}
+
+function makeSampledPiano() {
+  const sampleBaseUrl = globalThis.PROMPTBEATS_PIANO_SAMPLE_BASE_URL;
+  if (!sampleBaseUrl) {
+    return makeSoftPiano();
+  }
+
+  let samplesLoaded = false;
+  const fallback = makeSoftPiano();
+  const sampler = new Tone.Sampler({
+    urls: {
+      C3: "C3.mp3",
+      E3: "E3.mp3",
+      G3: "G3.mp3",
+      C4: "C4.mp3",
+      E4: "E4.mp3",
+      G4: "G4.mp3",
+      C5: "C5.mp3",
+    },
+    baseUrl: sampleBaseUrl.endsWith("/") ? sampleBaseUrl : `${sampleBaseUrl}/`,
+    release: 1.1,
+    onload: () => {
+      samplesLoaded = true;
+    },
+  });
+
+  return {
+    connect(output) {
+      sampler.connect(output);
+      fallback.connect(output);
+      return this;
+    },
+    triggerAttackRelease(note, duration, time, velocity) {
+      const voice = samplesLoaded ? sampler : fallback;
+      voice.triggerAttackRelease(note, duration, time, velocity);
+    },
+    dispose() {
+      sampler.dispose();
+      fallback.dispose();
     },
   };
 }
@@ -113,10 +164,9 @@ export function makeSynth(sound) {
         envelope: { attack: 0.018, decay: 0.3, sustain: 0.48, release: 1.1 },
       });
     case "soft_piano":
-      return new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "triangle" },
-        envelope: { attack: 0.006, decay: 0.42, sustain: 0.18, release: 0.9 },
-      });
+      return makeSoftPiano();
+    case "sampled_piano":
+      return makeSampledPiano();
     case "acid_bass":
       return new Tone.MonoSynth({
         oscillator: { type: "sawtooth" },

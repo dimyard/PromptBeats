@@ -69,6 +69,11 @@ describe("song editing helpers", () => {
     assert.equal(good.tracks[0].sound, "techno_kit");
   });
 
+  it("allows sampled_piano on synth tracks", () => {
+    const next = setTrackSound(song, "bass", "sampled_piano");
+    assert.equal(next.tracks[1].sound, "sampled_piano");
+  });
+
   it("toggles sampler hits in track.events", () => {
     const added = toggleDrumStep(song, "drums", 4, "F#2");
     assert.equal(added.tracks[0].events.some((event) => event.step === 4 && event.note === "F#2"), true);
@@ -96,6 +101,15 @@ describe("song editing helpers", () => {
     assert.equal(added.id, "drums_2");
     assert.equal(added.instrument, "sampler");
     assert.equal(added.sound, "trap_kit");
+    assert.deepEqual(added.events, []);
+  });
+
+  it("adds sampled_piano as a compatible synth track", () => {
+    const next = addTrack(song, { role: "lead", instrument: "synth", sound: "sampled_piano" });
+    const added = next.tracks.at(-1);
+    assert.equal(added.id, "lead");
+    assert.equal(added.instrument, "synth");
+    assert.equal(added.sound, "sampled_piano");
     assert.deepEqual(added.events, []);
   });
 

@@ -132,6 +132,21 @@ test("accepts expanded synth and sampler catalog", () => {
   assert.equal(res.ok, true, res.errors.join("; "));
 });
 
+test("accepts sampled_piano as a synth sound", () => {
+  const song = baseSong();
+  song.tracks = [
+    {
+      id: "piano",
+      role: "lead",
+      instrument: "synth",
+      sound: "sampled_piano",
+      events: [{ step: 0, note: "C4", dur: 4, vel: 0.8 }],
+    },
+  ];
+  const res = validateSong(song);
+  assert.equal(res.ok, true, res.errors.join("; "));
+});
+
 // ---- parseSong -----------------------------------------------------------
 
 test("parseSong rejects broken JSON text", () => {

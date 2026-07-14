@@ -33,3 +33,21 @@ test("backend validation accepts expanded catalog", () => {
   };
   assert.equal(validateSong(song).ok, true);
 });
+
+test("backend validation accepts sampled_piano synth tracks", () => {
+  const song = {
+    version: 1,
+    bpm: 96,
+    bars: 1,
+    tracks: [
+      {
+        id: "piano",
+        role: "lead",
+        instrument: "synth",
+        sound: "sampled_piano",
+        events: [{ step: 0, note: "C4", dur: 4, vel: 0.8 }],
+      },
+    ],
+  };
+  assert.equal(validateSong(song).ok, true);
+});
