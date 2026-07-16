@@ -49,6 +49,17 @@ const normalizeDrumNote = (note) => {
   return note.length > 0 ? `${note[0].toUpperCase()}${note.slice(1)}` : "";
 };
 
+const MIN_TRIGGER_GAP_SECONDS = 0.0001;
+
+export function reserveDrumTriggerTime(lastStarts, hit, time) {
+  const previous = lastStarts.get(hit);
+  const safeTime = previous !== undefined && time <= previous
+    ? previous + MIN_TRIGGER_GAP_SECONDS
+    : time;
+  lastStarts.set(hit, safeTime);
+  return safeTime;
+}
+
 function makeSoftPiano() {
   return new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: "triangle" },
@@ -73,6 +84,26 @@ function makePolyPluck() {
       const voice = voices[voiceIndex % voices.length];
       voiceIndex += 1;
       voice.triggerAttackRelease(note, duration, time, velocity);
+    },
+    dispose() {
+      voices.forEach((voice) => voice.dispose());
+    },
+  };
+}
+
+function makeNoisePool(options, size = 16) {
+  const voices = Array.from({ length: size }, () => new Tone.NoiseSynth(options));
+  let voiceIndex = 0;
+
+  return {
+    connect(output) {
+      voices.forEach((voice) => voice.connect(output));
+      return this;
+    },
+    triggerAttackRelease(duration, time, velocity) {
+      const voice = voices[voiceIndex % voices.length];
+      voiceIndex += 1;
+      voice.triggerAttackRelease(duration, time, velocity);
     },
     dispose() {
       voices.forEach((voice) => voice.dispose());
@@ -255,7 +286,7 @@ export function makeKit(sound, output = Tone.getDestination()) {
     oscillator: { type: "sine" },
     envelope: { attack: 0.001, decay: 0.26, sustain: 0.01, release: 0.08 },
   });
-  const snareNoise = new Tone.NoiseSynth({
+  const snareNoise = makeNoisePool({
     noise: { type: profile.snareNoise },
     envelope: { attack: 0.001, decay: profile.snareDecay, sustain: 0 },
   });
@@ -264,15 +295,15 @@ export function makeKit(sound, output = Tone.getDestination()) {
     octaves: 1.5,
     envelope: { attack: 0.001, decay: 0.07, sustain: 0, release: 0.02 },
   });
-  const clap = new Tone.NoiseSynth({
+  const clap = makeNoisePool({
     noise: { type: profile.snareNoise },
     envelope: { attack: 0.001, decay: 0.075, sustain: 0 },
-  });
-  const closedHat = new Tone.NoiseSynth({
+  }, 24);
+  const closedHat = makeNoisePool({
     noise: { type: profile.hatNoise },
     envelope: { attack: 0.001, decay: profile.hatDecay, sustain: 0 },
   });
-  const openHat = new Tone.NoiseSynth({
+  const openHat = makeNoisePool({
     noise: { type: profile.hatNoise },
     envelope: { attack: 0.001, decay: profile.openHatDecay, sustain: 0 },
   });
@@ -281,7 +312,7 @@ export function makeKit(sound, output = Tone.getDestination()) {
     octaves: 3.5,
     envelope: { attack: 0.001, decay: 0.19, sustain: 0.01, release: 0.04 },
   });
-  const ride = new Tone.NoiseSynth({
+  const ride = makeNoisePool({
     noise: { type: "white" },
     envelope: { attack: 0.002, decay: profile.rideDecay, sustain: 0 },
   });
@@ -290,12 +321,14 @@ export function makeKit(sound, output = Tone.getDestination()) {
     [kick, snareNoise, snareBody, clap, closedHat, openHat, tom, ride],
     output,
   );
+  const lastStarts = new Map();
 
   return {
     trigger(note, time, velocity = 0.8) {
       const vel = clampVelocity(velocity);
       const hit = DRUM_NOTE_MAP[normalizeDrumNote(note)] ?? "kick";
-      const at = typeof time === "number" ? time : Tone.Time(time).toSeconds();
+      const rawAt = typeof time === "number" ? time : Tone.Time(time).toSeconds();
+      const at = reserveDrumTriggerTime(lastStarts, hit, rawAt);
 
       switch (hit) {
         case "snare":
@@ -306,6 +339,7 @@ export function makeKit(sound, output = Tone.getDestination()) {
           clap.triggerAttackRelease("32n", at, vel * 0.62);
           clap.triggerAttackRelease("32n", at + profile.clapDelay, vel * 0.48);
           clap.triggerAttackRelease("32n", at + profile.clapDelay * 2, vel * 0.32);
+          lastStarts.set(hit, at + profile.clapDelay * 2);
           break;
         case "closedhat":
           closedHat.triggerAttackRelease("64n", at, vel * 0.7);

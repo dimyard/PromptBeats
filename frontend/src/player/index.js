@@ -30,6 +30,17 @@ const numberInRange = (value, fallback, min, max) => {
 
 const safeSteps = (bars) => Math.max(16, Math.floor(numberInRange(bars, DEFAULT_BARS, 1, MAX_BARS)) * 16);
 
+export function buildPartEvents(events = [], totalSteps = 16) {
+  const evts = [];
+  for (const e of events) {
+    if (typeof e.step !== "number" || e.step < 0 || e.step >= totalSteps) continue;
+    const dur = Math.max(1, Math.min(numberInRange(e.dur, 1, 1, totalSteps), totalSteps - e.step));
+    evts.push([stepToTime(e.step), { ...e, dur }]);
+  }
+  evts.sort((a, b) => a[1].step - b[1].step);
+  return evts;
+}
+
 export function createPlayer() {
   let parts = [];
   let voices = [];
@@ -225,7 +236,6 @@ export function createPlayer() {
         voices.push(voice);
 
         // Skip/report events outside the loop; defensively clamp dur to the loop end.
-        const evts = [];
         for (const e of track.events ?? []) {
           if (typeof e.step !== "number" || e.step < 0 || e.step >= totalSteps) {
             emit("error", {
@@ -233,11 +243,9 @@ export function createPlayer() {
               message: `event step ${e.step} outside loop (0..${totalSteps - 1})`,
               details: { track: track.id, step: e.step },
             });
-            continue;
           }
-          const dur = Math.max(1, Math.min(numberInRange(e.dur, 1, 1, totalSteps), totalSteps - e.step));
-          evts.push([stepToTime(e.step), { ...e, dur }]);
         }
+        const evts = buildPartEvents(track.events, totalSteps);
         const part = new Tone.Part((time, e) => {
           const vel = e.vel ?? 0.8;
           if (wantsKit) {
@@ -324,12 +332,7 @@ export function createPlayer() {
           voice.connect(gain);
         }
 
-        const evts = [];
-        for (const e of track.events ?? []) {
-          if (typeof e.step !== "number" || e.step < 0 || e.step >= steps) continue;
-          const dur = Math.max(1, Math.min(numberInRange(e.dur, 1, 1, steps), steps - e.step));
-          evts.push([stepToTime(e.step), { ...e, dur }]);
-        }
+        const evts = buildPartEvents(track.events, steps);
 
         const part = new Tone.Part((time, e) => {
           const vel = e.vel ?? 0.8;

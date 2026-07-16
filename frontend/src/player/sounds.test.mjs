@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { PIANO_SAMPLE_URLS, getPianoSampleBaseUrl } from "./sounds.js";
+import { PIANO_SAMPLE_URLS, getPianoSampleBaseUrl, reserveDrumTriggerTime } from "./sounds.js";
 
 test("sampled piano uses bundled sample path by default", () => {
   assert.equal(getPianoSampleBaseUrl({}), "/samples/piano/");
@@ -53,4 +53,13 @@ test("all sampled piano wav files exist in public samples", () => {
       `${fileName} is missing`,
     );
   }
+});
+
+test("reserveDrumTriggerTime nudges repeated drum starts forward", () => {
+  const lastStarts = new Map();
+
+  assert.equal(reserveDrumTriggerTime(lastStarts, "openhat", 1), 1);
+  assert.equal(reserveDrumTriggerTime(lastStarts, "openhat", 1), 1.0001);
+  assert.equal(reserveDrumTriggerTime(lastStarts, "openhat", 0.5), 1.0002);
+  assert.equal(reserveDrumTriggerTime(lastStarts, "closedhat", 0.5), 0.5);
 });
