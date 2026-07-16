@@ -10,6 +10,7 @@ import {
   validateSong,
   normalizeImportedSong,
   songFilename,
+  downloadBlob,
 } from "./song-io.js";
 
 const sample = JSON.parse(
@@ -286,4 +287,75 @@ test("songFilename lowercases and strips non latin/digit/hyphen", () => {
   const name = songFilename({ title: "Мой Трек 2" }, "json");
   // cyrillic dropped → only "2" survives
   assert.equal(name, "2.json");
+});
+
+// ---- browser download helper --------------------------------------------
+
+test("downloadBlob revokes the object URL asynchronously after click", () => {
+  const originalDocument = globalThis.document;
+  const originalUrl = globalThis.URL;
+  const originalSetTimeout = globalThis.setTimeout;
+
+  const calls = [];
+  const anchor = {
+    href: "",
+    download: "",
+    click() {
+      calls.push("click");
+    },
+    remove() {
+      calls.push("remove");
+    },
+  };
+
+  globalThis.document = {
+    createElement(tag) {
+      assert.equal(tag, "a");
+      calls.push("create");
+      return anchor;
+    },
+    body: {
+      appendChild(node) {
+        assert.equal(node, anchor);
+        calls.push("append");
+      },
+    },
+  };
+  globalThis.URL = {
+    createObjectURL(blob) {
+      assert.equal(blob, "blob");
+      calls.push("create-url");
+      return "blob:promptbeats";
+    },
+    revokeObjectURL(url) {
+      assert.equal(url, "blob:promptbeats");
+      calls.push("revoke");
+    },
+  };
+  globalThis.setTimeout = (callback, delay) => {
+    assert.equal(delay, 0);
+    calls.push("defer-revoke");
+    callback();
+    return 1;
+  };
+
+  try {
+    downloadBlob("blob", "track.wav");
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.URL = originalUrl;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+
+  assert.equal(anchor.href, "blob:promptbeats");
+  assert.equal(anchor.download, "track.wav");
+  assert.deepEqual(calls, [
+    "create-url",
+    "create",
+    "append",
+    "click",
+    "remove",
+    "defer-revoke",
+    "revoke",
+  ]);
 });
